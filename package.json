@@ -12,6 +12,7 @@
     "test:api": "npx tsx scripts/test-api-endpoints.ts && npx tsx scripts/test-api-security.ts",
     "test:maintenance": "npx tsx scripts/test-phase5-maintenance.ts",
     "test": "npx tsx scripts/test-provider-directory.ts && npx tsx scripts/test-phase3-hardening.ts && npx tsx scripts/test-api-endpoints.ts && npx tsx scripts/test-api-security.ts && npx tsx scripts/test-phase5-maintenance.ts"
+    "test": "vitest run"
     "clean": "next clean"
   },
   "dependencies": {
@@ -49,6 +50,8 @@
     "firebase-tools": "^15.0.0",
     "tailwindcss": "4.1.11",
     "tw-animate-css": "^1.4.0",
+    "typescript": "5.9.3",
+    "vitest": "^5.0.5"
     "typescript": "5.9.3"
   }
 }
