@@ -1,3 +1,6 @@
+// Prisma schema for Tele-Follow-Up Orchestrator
+// Database: PostgreSQL
+// Shared repository contract for Saturn-space/Telle-Follow-up
 // Tele-Follow-Up Orchestrator - Shared Prisma Schema
 // Module: Member 2 - AI Risk Prediction & Clinical Decision Support
 // Integrates with: Member 1 (Patient & Recovery), Member 4 (Travel), Member 5 (Follow-Up)
@@ -11,6 +14,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ==========================================
+// SHARED AUTH & USERS (Foundational)
+// ==========================================
+
+enum UserRole {
+  PATIENT
+  CLINICIAN
 // -----------------------------------------------------------------------------
 // ENUMS
 // -----------------------------------------------------------------------------
@@ -23,6 +33,304 @@ enum UserRole {
   ADMIN
 }
 
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         UserRole  @default(PATIENT)
+  phone        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  notifications Notification[]
+}
+
+// ==========================================
+// MEMBER 1: PATIENT & RECOVERY STUBS
+// ==========================================
+
+model Patient {
+  id               String         @id @default(cuid())
+  mrn              String         @unique // Medical Record Number
+  name             String
+  age              Int
+  gender           String
+  homeCity         String
+  homeState        String
+  homePincode      String
+  contactPhone     String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  surgeries        Surgery[]
+  followUpPlans    FollowUpPlan[]
+  appointments     Appointment[]
+}
+
+model Surgery {
+  id                  String    @id @default(cuid())
+  patientId           String
+  procedureName       String
+  operatingHospital   String
+  hospitalState       String
+  surgeonName         String
+  surgeryDate         DateTime
+  dischargeDate       DateTime
+  dischargeSummary    String
+  createdAt           DateTime  @default(now())
+
+  patient             Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// MEMBER 2: AI RISK ASSESSMENT STUBS
+// ==========================================
+
+enum RiskTier {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model RiskAssessment {
+  id                  String         @id @default(cuid())
+  patientId           String
+  riskTier            RiskTier
+  riskScore           Float          // 0.0 to 1.0
+  summaryRationale    String
+  clinicalRedFlags    String[]
+  reviewedByDoctor    Boolean        @default(false)
+  doctorNotes         String?
+  assessedAt          DateTime       @default(now())
+
+  followUpPlans       FollowUpPlan[]
+}
+
+// ==========================================
+// MEMBER 3: HEALTHCARE PROVIDER STUBS
+// ==========================================
+
+enum VerificationStatus {
+  VERIFIED
+  SEEDED_DEMO
+  UNVERIFIED
+}
+
+model Provider {
+  id                  String             @id @default(cuid())
+  name                String
+  facilityType        String             // Clinic, Diagnostic Lab, District Hospital
+  city                String
+  state               String
+  distanceKm          Float?
+  verificationStatus  VerificationStatus @default(SEEDED_DEMO)
+  servicesOffered     String[]           // e.g. ["Wound Care", "Suture Removal", "CBC Lab"]
+  contactPhone        String
+
+  appointments        Appointment[]
+}
+
+// ==========================================
+// MEMBER 4: TRAVEL COMPARISON STUBS
+// ==========================================
+
+model TravelComparison {
+  id                     String         @id @default(cuid())
+  patientId              String
+  originCity             String
+  destinationHospital    String
+  roundTripDistanceKm    Float
+  estimatedTravelHours   Float
+  estimatedCostInr       Float
+  recommendedOption      String         // "HYBRID_LOCAL_AND_TELECONSULT" | "RETURN_TO_OPERATING_HOSPITAL"
+  recommendationRationale String
+  isEscalated            Boolean        @default(false)
+  createdAt              DateTime       @default(now())
+
+  followUpPlans          FollowUpPlan[]
+}
+
+// ==========================================
+// MEMBER 5: FOLLOW-UP, APPOINTMENTS & INTEGRATION
+// ==========================================
+
+enum FollowUpPlanStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum AppointmentType {
+  TELECONSULTATION
+  LOCAL_CLINIC_VISIT
+  HOSPITAL_RETURN
+  DIAGNOSTIC_LAB
+}
+
+enum AppointmentStatus {
+  PROPOSED
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  RESCHEDULED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TeleSessionStatus {
+  PENDING
+  READY
+  ACTIVE
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum NotificationType {
+  APPOINTMENT_SCHEDULED
+  APPOINTMENT_REMINDER
+  TELECONSULT_LINK_READY
+  PLAN_UPDATED
+  PAYMENT_CONFIRMED
+  CLINICAL_ALERT
+}
+
+model FollowUpPlan {
+  id                   String             @id @default(cuid())
+  patientId            String
+  riskAssessmentId     String?
+  travelComparisonId   String?
+  title                String
+  clinicalSummary      String
+  status               FollowUpPlanStatus @default(DRAFT)
+  approvedByClinician  String?            // Clinician name or user ID
+  approvedAt           DateTime?
+  startDate            DateTime
+  targetCompletionDate DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  patient              Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  riskAssessment       RiskAssessment?    @relation(fields: [riskAssessmentId], references: [id])
+  travelComparison     TravelComparison?  @relation(fields: [travelComparisonId], references: [id])
+
+  appointments         Appointment[]
+  teleSessions         TeleconsultationSession[]
+  paymentOrders        PaymentOrder[]
+
+  @@index([patientId])
+  @@index([status])
+}
+
+model Appointment {
+  id                  String             @id @default(cuid())
+  planId              String
+  patientId           String
+  providerId          String?
+  type                AppointmentType
+  status              AppointmentStatus  @default(PROPOSED)
+  scheduledStartTime  DateTime
+  scheduledEndTime    DateTime
+  locationOrService   String             // e.g. "Teleconsultation Room" or "Apex Clinic - Room 2"
+  clinicalNotes       String?
+  cancellationReason  String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  plan                FollowUpPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  patient             Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  provider            Provider?          @relation(fields: [providerId], references: [id])
+
+  teleSession         TeleconsultationSession?
+  outcomeRecord       ConsultationRecord?
+
+  @@index([planId])
+  @@index([patientId])
+  @@index([status])
+}
+
+model TeleconsultationSession {
+  id                  String             @id @default(cuid())
+  planId              String
+  appointmentId       String             @unique
+  roomName            String             @unique // Opaque random UUID, ZERO patient PII
+  domain              String             @default("meet.jit.si")
+  status              TeleSessionStatus  @default(PENDING)
+  jwtToken            String?
+  startedAt           DateTime?
+  endedAt             DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  plan                FollowUpPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  appointment         Appointment        @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  outcomeRecord       ConsultationRecord?
+
+  @@index([roomName])
+}
+
+model ConsultationRecord {
+  id                  String             @id @default(cuid())
+  appointmentId       String             @unique
+  teleSessionId       String?            @unique
+  clinicianId         String             // ID or Name of attending clinician
+  subjectiveNotes     String
+  objectiveFindings   String?
+  assessmentPlan      String
+  followUpRequired    Boolean            @default(false)
+  nextFollowUpDate    DateTime?
+  completedAt         DateTime           @default(now())
+
+  appointment         Appointment        @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  teleSession         TeleconsultationSession? @relation(fields: [teleSessionId], references: [id])
+}
+
+model PaymentOrder {
+  id                  String             @id @default(cuid())
+  planId              String
+  appointmentId       String?
+  amount              Int                // Smallest currency unit (paise for INR)
+  currency            String             @default("INR")
+  receipt             String             @unique
+  status              PaymentStatus      @default(PENDING)
+  razorpayOrderId     String             @unique
+  razorpayPaymentId   String?            @unique
+  razorpaySignature   String?
+  failureReason       String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  plan                FollowUpPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([razorpayOrderId])
+}
+
+model Notification {
+  id                  String             @id @default(cuid())
+  recipientUserId     String
+  type                NotificationType
+  title               String
+  message             String             // Minimal clinical data to preserve privacy
+  read                Boolean            @default(false)
+  deliveryStatus      String             @default("SIMULATED") // SIMULATED / SENT / FAILED
+  linkUrl             String?
+  createdAt           DateTime           @default(now())
+
+  user                User?              @relation(fields: [recipientUserId], references: [id])
+
+  @@index([recipientUserId])
 enum RiskLevel {
   LOW
   MODERATE
