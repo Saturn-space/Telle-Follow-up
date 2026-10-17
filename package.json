@@ -8,6 +8,10 @@
     "start": "next start",
     "lint": "eslint .",
     "clean": "next clean",
+    "test:unit": "npx tsx scripts/test-provider-directory.ts && npx tsx scripts/test-phase3-hardening.ts",
+    "test:api": "npx tsx scripts/test-api-endpoints.ts && npx tsx scripts/test-api-security.ts",
+    "test:maintenance": "npx tsx scripts/test-phase5-maintenance.ts",
+    "test": "npx tsx scripts/test-provider-directory.ts && npx tsx scripts/test-phase3-hardening.ts && npx tsx scripts/test-api-endpoints.ts && npx tsx scripts/test-api-security.ts && npx tsx scripts/test-phase5-maintenance.ts"
     "test": "vitest run"
     "clean": "next clean"
   },

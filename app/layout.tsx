@@ -3,6 +3,10 @@ import './globals.css'; // Global styles
 
 export const metadata: Metadata = {
   title: 'Tele-Follow-Up Orchestrator',
+  description: 'An AI-Assisted Post-Surgical Follow-Up Coordination System to streamline patient recovery, risk assessment, local care discovery, travel analysis, and teleconsultation.',
+  openGraph: {
+    title: 'Tele-Follow-Up Orchestrator',
+    description: 'An AI-Assisted Post-Surgical Follow-Up Coordination System to streamline patient recovery, risk assessment, local care discovery, travel analysis, and teleconsultation.',
   description: 'An AI-Assisted Post-Surgical Follow-Up Coordination System connecting patients, clinicians, and local care providers.',
   openGraph: {
     title: 'Tele-Follow-Up Orchestrator',
@@ -20,6 +24,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Tele-Follow-Up Orchestrator',
+    description: 'An AI-Assisted Post-Surgical Follow-Up Coordination System to streamline patient recovery, risk assessment, local care discovery, travel analysis, and teleconsultation.',
     description: 'An AI-Assisted Post-Surgical Follow-Up Coordination System connecting patients, clinicians, and local care providers.',
     description: 'An AI-Assisted Post-Surgical Follow-Up Coordination System to optimize recovery monitoring, risk assessment, local care discovery, and follow-up teleconsultation.',
     description: 'An AI-Assisted Post-Surgical Follow-Up Coordination System to reduce avoidable long-distance travel and coordinate safe care.',

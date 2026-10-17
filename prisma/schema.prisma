@@ -1,3 +1,8 @@
+// ============================================================================
+// TELE-FOLLOW-UP ORCHESTRATOR - SHARED PRISMA SCHEMA
+// Module: Member 3 - Local Healthcare Provider Directory & Service Discovery
+// Monorepo Target: PostgreSQL + Prisma ORM
+// ============================================================================
 // Prisma schema for Tele-Follow-Up Orchestrator
 // Database: PostgreSQL
 // Shared repository contract for Saturn-space/Telle-Follow-up
@@ -14,6 +19,153 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+enum FacilityType {
+  HOSPITAL
+  CLINIC
+  DIAGNOSTIC_CENTER
+  WOUND_CARE_CENTER
+  SURGICAL_REHAB
+}
+
+enum VerificationStatus {
+  SEEDED_DEMO
+  UNVERIFIED
+  PENDING_REVIEW
+  VERIFIED
+}
+
+enum ProviderDataSource {
+  SYNTHETIC_SEED
+  COMMUNITY_SUBMISSION
+  OFFICIAL_REGISTRY
+  PARTNER_HEALTH_SYSTEM
+}
+
+enum ServiceCategory {
+  WOUND_CARE
+  SUTURE_REMOVAL
+  DRAIN_MANAGEMENT
+  POST_OP_LABS
+  IMAGING_XRAY
+  PHYSIOTHERAPY
+  GENERAL_POST_OP_EVAL
+}
+
+enum ReferralStatus {
+  DRAFT
+  PENDING_CLINICIAN_APPROVAL
+  DISPATCHED_TO_LOCAL
+  ACCEPTED_BY_LOCAL
+  COMPLETED
+  DECLINED
+  CANCELLED
+}
+
+// ----------------------------------------------------------------------------
+// MODELS
+// ----------------------------------------------------------------------------
+
+/// HealthcareFacility represents an accredited hospital, community clinic,
+/// or diagnostic center capable of providing post-surgical recovery care.
+model HealthcareFacility {
+  id                  String             @id @default(cuid())
+  name                String
+  facilityType        FacilityType       @default(CLINIC)
+  addressLine1        String
+  addressLine2        String?
+  city                String
+  state               String
+  postalCode          String
+  country             String             @default("India")
+  latitude            Float?
+  longitude           Float?
+  phone               String?
+  email               String?
+  websiteUrl          String?
+  operatingHours      Json?              // e.g., {"mon": "08:00-18:00", "sat": "09:00-14:00"}
+  verificationStatus  VerificationStatus @default(SEEDED_DEMO)
+  dataSource          ProviderDataSource @default(SYNTHETIC_SEED)
+  lastVerifiedAt      DateTime?
+  emergencyCapable    Boolean            @default(false)
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  // Relationships
+  services            FacilityService[]
+  verifications       ProviderVerificationRecord[]
+  referrals           CareReferral[]
+
+  // Indexes for geospatial, filtering, and full-text searches
+  @@index([city, state])
+  @@index([postalCode])
+  @@index([facilityType])
+  @@index([verificationStatus])
+  @@index([latitude, longitude])
+}
+
+/// FacilityService defines granular post-surgical follow-up capabilities
+/// available at a specific HealthcareFacility (e.g. stitch removal, drain care).
+model FacilityService {
+  id                  String             @id @default(cuid())
+  facilityId          String
+  serviceCategory     ServiceCategory
+  specialtyName       String
+  availableDays       Json?              // e.g. ["MON", "TUE", "WED", "THU", "FRI"]
+  requiresPreBooking  Boolean            @default(true)
+  estimatedCostINR    Float?
+  description         String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  facility            HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@index([facilityId])
+  @@index([serviceCategory])
+}
+
+/// ProviderVerificationRecord maintains an immutable audit trail of verification
+/// checks performed by authorized coordinators or clinical administrators.
+model ProviderVerificationRecord {
+  id                  String             @id @default(cuid())
+  facilityId          String
+  status              VerificationStatus
+  verifierUserId      String?            // Foreign key to platform User model
+  evidenceNotes       String             // Evidence notes (license check, phone verification)
+  registryLicenseNo   String?            // Official state registry license number
+  verifiedAt          DateTime           @default(now())
+
+  facility            HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@index([facilityId])
+}
+
+/// CareReferral tracks a coordinated referral request linking a post-op patient
+/// to a local healthcare facility for routine post-surgical follow-up.
+model CareReferral {
+  id                    String          @id @default(cuid())
+  patientId             String          // Foreign key to Member 1 Patient model
+  facilityId            String
+  requestedServices     Json            // Array of ServiceCategory
+  referralStatus        ReferralStatus  @default(DRAFT)
+  urgencyLevel          String          @default("ROUTINE") // ROUTINE, PRIORITY, URGENT
+  clinicalSummary       String          // Context passed from M1 recovery logs & M2 AI risk
+  attendingPhysicianId  String?         // Approving clinician ID
+  approvedAt            DateTime?
+  scheduledDate         DateTime?
+  completionNotes       String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  facility              HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([facilityId])
+  @@index([referralStatus])
 // ==========================================
 // SHARED AUTH & USERS (Foundational)
 // ==========================================
