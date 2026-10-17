@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "node test/member1-validation.test.mjs",
     "clean": "next clean"
   },
   "dependencies": {

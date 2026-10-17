@@ -1,5 +1,6 @@
 {
   "name": "Tele-Follow-Up Orchestrator",
+  "description": "An AI-Assisted Post-Surgical Follow-Up Coordination System connecting patients, clinicians, local care, and teleconsultations.",
   "description": "An AI-Assisted Post-Surgical Follow-Up Coordination System to optimize recovery monitoring, risk assessment, local care discovery, and follow-up teleconsultation.",
   "description": "An AI-Assisted Post-Surgical Follow-Up Coordination System to reduce avoidable long-distance travel and coordinate safe care.",
   "requestFramePermissions": [],
