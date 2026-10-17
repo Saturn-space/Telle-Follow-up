@@ -1,0 +1,164 @@
+// Tele-Follow-Up Orchestrator - Shared Database Schema
+// Shared PostgreSQL Database with Prisma ORM
+// Member 1 Slice: Patient Registration, Surgery, Discharge, Recovery Monitoring, Documents & OCR
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PATIENT
+  CLINICIAN
+  COORDINATOR
+  ADMIN
+}
+
+enum OcrStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVIEWED
+}
+
+enum DocumentCategory {
+  DISCHARGE_SUMMARY
+  LAB_REPORT
+  WOUND_PHOTO
+  PRESCRIPTION
+  OTHER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  fullName  String
+  role      Role     @default(PATIENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   Patient?
+}
+
+model Patient {
+  id                String             @id @default(uuid())
+  userId            String?            @unique
+  user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  mrn               String             @unique // Synthetic Medical Record Number (e.g., TFO-2026-001)
+  fullName          String
+  dateOfBirth       DateTime
+  gender            String
+  phone             String
+  homeAddress       String
+  homeCity          String
+  homeState         String
+  homeZip           String
+  emergencyContact  String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  // Member 1 Relations
+  surgeries         Surgery[]
+  recoveryEntries   RecoveryEntry[]
+  vitalMeasurements VitalMeasurement[]
+  documents         Document[]
+
+  @@index([mrn])
+  @@index([homeState, homeCity])
+}
+
+model Surgery {
+  id                    String    @id @default(uuid())
+  patientId             String
+  patient               Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  procedureName         String
+  surgicalSpecialty     String    // Orthopedic, Cardiothoracic, General Surgery, etc.
+  hospitalName          String    // Primary/Tertiary Operating Hospital
+  hospitalCity          String
+  hospitalState         String
+  operatingSurgeon      String
+  surgeryDate           DateTime
+  dischargeDate         DateTime
+  dischargeCondition    String    // Stable, Ambulatory with assistance, etc.
+  woundCareInstructions String?
+  plannedFollowUpDate   DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([patientId])
+  @@index([surgeryDate])
+}
+
+model RecoveryEntry {
+  id              String             @id @default(uuid())
+  patientId       String
+  patient         Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recordedAt      DateTime           @default(now())
+  painScore       Int                // 0 to 10 scale
+  mobilityStatus  String             // Independent, Assisted, Bedbound
+  woundCondition  String             // Clean/Dry, Redness, Drainage, Heat, Swelling, Dehiscence
+  symptoms        String[]           // Array of symptom keys, e.g. ["fever", "nausea", "swelling"]
+  patientNotes    String?
+  reportedByRole  Role               @default(PATIENT)
+  createdAt       DateTime           @default(now())
+
+  // Vital measurements associated with this observation
+  vitals          VitalMeasurement[]
+
+  @@index([patientId, recordedAt])
+}
+
+model VitalMeasurement {
+  id              String         @id @default(uuid())
+  patientId       String
+  patient         Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recoveryEntryId String?
+  recoveryEntry   RecoveryEntry? @relation(fields: [recoveryEntryId], references: [id], onDelete: SetNull)
+  recordedAt      DateTime       @default(now())
+  temperatureC    Float?         // Celsius (e.g. 37.2)
+  heartRateBpm    Int?           // Beats per minute
+  systolicBp      Int?           // mmHg
+  diastolicBp     Int?           // mmHg
+  spO2Percent     Int?           // Percentage (e.g. 98)
+  drainOutputMl   Float?         // Drain output volume in ml
+  createdAt       DateTime       @default(now())
+
+  @@index([patientId, recordedAt])
+}
+
+model Document {
+  id            String            @id @default(uuid())
+  patientId     String
+  patient       Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  category      DocumentCategory  @default(DISCHARGE_SUMMARY)
+  originalName  String
+  mimeType      String
+  fileSize      Int               // In bytes
+  filePath      String            // Relative or secure storage reference
+  uploadedAt    DateTime          @default(now())
+  ocrExtraction OcrExtraction?
+
+  @@index([patientId])
+}
+
+model OcrExtraction {
+  id                String       @id @default(uuid())
+  documentId        String       @unique
+  document          Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  status            OcrStatus    @default(PENDING)
+  rawExtractedText  String?
+  extractedMetadata Json?        // Parsed key-values (e.g. dates, vital signs, medications)
+  isVerified        Boolean      @default(false)
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+  correctionNotes   String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([documentId])
+  @@index([status])
+}
