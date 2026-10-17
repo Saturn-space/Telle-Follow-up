@@ -1,0 +1,215 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Tele-Follow-Up Orchestrator - Member 4 Travel Optimization & Escalation API",
+    "description": "API contracts for patient follow-up travel comparison, geospatial routing, scenario-based cost estimation, and emergency clinical escalation override.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/api/travel",
+      "description": "Main API route prefix"
+    }
+  ],
+  "paths": {
+    "/compare": {
+      "post": {
+        "summary": "Execute Travel Comparison",
+        "description": "Evaluates candidate healthcare destinations against clinical requirements, calculates routing distance and duration, models travel costs, and triggers emergency escalation if clinical risk is critical.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TravelComparisonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Comparison executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TravelComparisonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input parameters (e.g. coordinates out of range)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/comparisons/{id}": {
+      "get": {
+        "summary": "Retrieve Travel Comparison",
+        "description": "Retrieves an existing travel comparison result by comparison ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comparison found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TravelComparisonResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Comparison ID not found"
+          }
+        }
+      }
+    },
+    "/escalations": {
+      "post": {
+        "summary": "Record Emergency Clinical Escalation",
+        "description": "Records an acute clinical red flag or emergency incident and assigns the nearest 24/7 surgical emergency facility.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscalationEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Escalation event logged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationEventResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/providers/{id}": {
+      "get": {
+        "summary": "Retrieve Provider Details",
+        "description": "Returns candidate provider details, verified coordinates, and surgical capabilities.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider retrieved successfully"
+          },
+          "404": {
+            "description": "Provider not found"
+          }
+        }
+      }
+    },
+    "/patients": {
+      "get": {
+        "summary": "List Available Patient Contexts",
+        "description": "Returns synthetic patient recovery profiles and baseline clinical risk states for demonstration and testing.",
+        "responses": {
+          "200": {
+            "description": "List of patients returned successfully"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GeoLocation": {
+        "type": "object",
+        "required": ["latitude", "longitude", "label"],
+        "properties": {
+          "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+          "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+          "label": { "type": "string" },
+          "district": { "type": "string" },
+          "state": { "type": "string" }
+        }
+      },
+      "TravelComparisonRequest": {
+        "type": "object",
+        "required": ["patientId", "origin", "requiredService"],
+        "properties": {
+          "patientId": { "type": "string" },
+          "origin": { "$ref": "#/components/schemas/GeoLocation" },
+          "requiredService": { "type": "string" },
+          "transportMode": { "type": "string", "enum": ["DRIVING", "PUBLIC_TRANSIT", "TAXI"] },
+          "simulateClinicalUrgency": { "type": "string", "enum": ["LOW", "MODERATE", "HIGH", "CRITICAL", "UNASSESSED_OR_MISSING"] }
+        }
+      },
+      "TravelComparisonResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "type": "object" },
+          "error": { "type": "object", "nullable": true }
+        }
+      },
+      "EscalationEventRequest": {
+        "type": "object",
+        "required": ["comparisonId", "patientId", "reason"],
+        "properties": {
+          "comparisonId": { "type": "string" },
+          "patientId": { "type": "string" },
+          "reason": { "type": "string" },
+          "urgencyLevel": { "type": "string", "enum": ["LOW", "MODERATE", "HIGH", "CRITICAL", "UNASSESSED_OR_MISSING"] },
+          "redFlags": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "EscalationEventResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "type": "object" },
+          "error": { "type": "object", "nullable": true }
+        }
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "details": { "type": "object" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
