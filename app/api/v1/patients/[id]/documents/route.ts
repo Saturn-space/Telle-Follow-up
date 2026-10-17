@@ -142,6 +142,20 @@ export async function POST(
       fileBuffer = body.base64Content || '';
     }
 
+    // Rejection of empty / zero-byte uploads
+    if (fileSize <= 0 || (Buffer.isBuffer(fileBuffer) && fileBuffer.length === 0)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'EMPTY_FILE',
+            message: 'Uploaded file is empty (0 bytes). Valid document content is required.',
+          },
+        },
+        { status: 400 }
+      );
+    }
+
     // Size limit check (max 10MB)
     const MAX_SIZE = 10 * 1024 * 1024;
     if (fileSize > MAX_SIZE) {
@@ -214,6 +228,23 @@ export async function POST(
           },
           { status: 415 }
         );
+      }
+
+      if (mimeType.toLowerCase() === 'image/webp') {
+        const isRiff = header4Ascii.startsWith('RIFF');
+        const isWebp = fileBuffer.length >= 12 && fileBuffer.subarray(8, 12).toString('ascii') === 'WEBP';
+        if (!isRiff || !isWebp) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                code: 'CONTENT_MIME_MISMATCH',
+                message: 'File content does not match declared WEBP format. RIFF/WEBP header signature missing.',
+              },
+            },
+            { status: 415 }
+          );
+        }
       }
     }
 

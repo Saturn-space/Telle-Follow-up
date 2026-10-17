@@ -37,14 +37,52 @@ export async function GET(
       );
     }
 
-    const observations = db.getRecoveryEntriesByPatientId(id);
+    const { searchParams } = new URL(req.url);
+    const limitParam = searchParams.get('limit');
+    const offsetParam = searchParams.get('offset');
+    const minPainParam = searchParams.get('minPain');
+    const maxPainParam = searchParams.get('maxPain');
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+
+    let observations = db.getRecoveryEntriesByPatientId(id);
+
+    // Filter by pain score range
+    if (minPainParam !== null) {
+      const minP = parseInt(minPainParam, 10);
+      if (!isNaN(minP)) observations = observations.filter((o) => o.painScore >= minP);
+    }
+    if (maxPainParam !== null) {
+      const maxP = parseInt(maxPainParam, 10);
+      if (!isNaN(maxP)) observations = observations.filter((o) => o.painScore <= maxP);
+    }
+
+    // Filter by date range
+    if (fromParam && !isNaN(Date.parse(fromParam))) {
+      const fromTime = new Date(fromParam).getTime();
+      observations = observations.filter((o) => new Date(o.recordedAt).getTime() >= fromTime);
+    }
+    if (toParam && !isNaN(Date.parse(toParam))) {
+      const toTime = new Date(toParam).getTime();
+      observations = observations.filter((o) => new Date(o.recordedAt).getTime() <= toTime);
+    }
+
+    const total = observations.length;
+
+    // Apply pagination
+    const offset = offsetParam ? Math.max(0, parseInt(offsetParam, 10)) : 0;
+    const limit = limitParam ? Math.max(1, Math.min(100, parseInt(limitParam, 10))) : undefined;
+
+    const paginated = limit !== undefined ? observations.slice(offset, offset + limit) : (offset > 0 ? observations.slice(offset) : observations);
 
     return NextResponse.json({
       success: true,
       data: {
         patientId: id,
-        total: observations.length,
-        observations,
+        total,
+        limit: limit ?? total,
+        offset,
+        observations: paginated,
       },
       message: 'Recovery observations retrieved successfully.',
     });

@@ -96,6 +96,11 @@ export async function GET() {
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
           responses: { '201': { description: 'Surgery recorded' } },
         },
+        patch: {
+          summary: 'Update surgical procedure or discharge details',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Surgery record updated' } },
+        },
       },
       '/patients/{id}/recovery-observations': {
         get: {

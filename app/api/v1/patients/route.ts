@@ -7,16 +7,39 @@ import { AuthGuard } from '@/lib/auth/rbac';
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = AuthGuard.getAuthContext(req);
+
+    // Security & Privacy: If role is PATIENT, isolate to their own record to prevent IDOR directory scraping
+    if (auth.role === 'PATIENT') {
+      const patient = auth.patientId ? db.getPatientById(auth.patientId) : null;
+      return NextResponse.json({
+        success: true,
+        data: {
+          total: patient ? 1 : 0,
+          patients: patient ? [patient] : [],
+        },
+        message: 'Patient profile retrieved successfully.',
+      });
+    }
+
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search') || undefined;
+    const limitParam = searchParams.get('limit');
+    const offsetParam = searchParams.get('offset');
 
-    const patients = db.getPatients(search);
+    const limit = limitParam ? Math.max(1, Math.min(100, parseInt(limitParam, 10))) : undefined;
+    const offset = offsetParam ? Math.max(0, parseInt(offsetParam, 10)) : undefined;
+
+    const allMatching = db.getPatients(search);
+    const paginated = db.getPatients(search, limit, offset);
 
     return NextResponse.json({
       success: true,
       data: {
-        total: patients.length,
-        patients,
+        total: allMatching.length,
+        limit: limit ?? allMatching.length,
+        offset: offset ?? 0,
+        patients: paginated,
       },
       message: 'Patients retrieved successfully.',
     });

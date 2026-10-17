@@ -28,9 +28,9 @@ export interface RecoveryObservationDataContract {
     recordedAt: string; // ISO
     reportedByRole: 'PATIENT' | 'CLINICIAN' | 'COORDINATOR' | 'ADMIN';
     painScore: {
-      value: number; // 0 to 10
+      value: number | null; // 0 to 10 scale or null if unrecorded
       scale: 'NRS_0_TO_10';
-    };
+    } | null;
     mobilityStatus: string;
     woundCondition: string;
     symptoms: string[];
@@ -58,7 +58,7 @@ export interface RecoveryObservationDataContract {
         unit: 'ml';
       } | null;
     };
-  };
+  } | null;
   historicalObservationsCount: number;
   unverifiedDocumentCount: number;
   dataQuality: {

@@ -39,10 +39,11 @@ export function SurgicalProfileView({ patient, surgery, onSurgeryUpdated }: Prop
     setError(null);
 
     try {
+      const isUpdating = Boolean(surgery?.id);
       const res = await fetch(`/api/v1/patients/${patient.id}/surgeries`, {
-        method: 'POST',
+        method: isUpdating ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(isUpdating ? { surgeryId: surgery!.id, ...formData } : formData),
       });
 
       const json = await res.json();

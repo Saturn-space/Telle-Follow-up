@@ -278,16 +278,22 @@ Follow-up: Staple removal at day 14. DVT prophylaxis via Apixaban 2.5mg BID x14d
   }
 
   // --- Patient Operations ---
-  public getPatients(search?: string): Patient[] {
-    const all = Array.from(this.patients.values());
-    if (!search || !search.trim()) return all;
-    const term = search.toLowerCase().trim();
-    return all.filter(
-      (p) =>
-        p.fullName.toLowerCase().includes(term) ||
-        p.mrn.toLowerCase().includes(term) ||
-        p.homeCity.toLowerCase().includes(term)
-    );
+  public getPatients(search?: string, limit?: number, offset?: number): Patient[] {
+    let all = Array.from(this.patients.values());
+    if (search && search.trim()) {
+      const term = search.toLowerCase().trim();
+      all = all.filter(
+        (p) =>
+          p.fullName.toLowerCase().includes(term) ||
+          p.mrn.toLowerCase().includes(term) ||
+          p.homeCity.toLowerCase().includes(term)
+      );
+    }
+    const start = typeof offset === 'number' && offset >= 0 ? offset : 0;
+    if (typeof limit === 'number' && limit > 0) {
+      return all.slice(start, start + limit);
+    }
+    return start > 0 ? all.slice(start) : all;
   }
 
   public getPatientById(id: string): Patient | undefined {
@@ -346,6 +352,20 @@ Follow-up: Staple removal at day 14. DVT prophylaxis via Apixaban 2.5mg BID x14d
     };
     this.surgeries.set(id, surgery);
     return surgery;
+  }
+
+  public updateSurgery(id: string, data: Partial<Surgery>): Surgery | null {
+    const existing = this.surgeries.get(id);
+    if (!existing) return null;
+    const updated: Surgery = {
+      ...existing,
+      ...data,
+      id: existing.id,
+      patientId: existing.patientId, // Preserve patient association
+      updatedAt: new Date().toISOString(),
+    };
+    this.surgeries.set(id, updated);
+    return updated;
   }
 
   // --- Recovery Entries Operations ---
@@ -621,41 +641,47 @@ Follow-up: Staple removal at day 14. DVT prophylaxis via Apixaban 2.5mg BID x14d
             dischargeCondition: surgery.dischargeCondition,
           }
         : null,
-      observation: {
-        observationId: latestRecovery?.id || 'NO_OBSERVATION',
-        recordedAt: latestRecovery?.recordedAt || new Date().toISOString(),
-        reportedByRole: latestRecovery?.reportedByRole || 'PATIENT',
-        painScore: {
-          value: latestRecovery?.painScore ?? 0,
-          scale: 'NRS_0_TO_10',
-        },
-        mobilityStatus: latestRecovery?.mobilityStatus || 'Unrecorded',
-        woundCondition: latestRecovery?.woundCondition || 'Unrecorded',
-        symptoms: latestRecovery?.symptoms || [],
-        patientNotes: latestRecovery?.patientNotes,
-        vitals: {
-          temperature: latestVital?.temperatureC
-            ? { value: latestVital.temperatureC, unit: 'celsius' }
-            : null,
-          heartRate: latestVital?.heartRateBpm
-            ? { value: latestVital.heartRateBpm, unit: 'bpm' }
-            : null,
-          bloodPressure:
-            latestVital?.systolicBp && latestVital?.diastolicBp
-              ? {
-                  systolic: latestVital.systolicBp,
-                  diastolic: latestVital.diastolicBp,
-                  unit: 'mmHg',
-                }
-              : null,
-          spO2: latestVital?.spO2Percent
-            ? { value: latestVital.spO2Percent, unit: 'percent' }
-            : null,
-          drainOutput: latestVital?.drainOutputMl
-            ? { value: latestVital.drainOutputMl, unit: 'ml' }
-            : null,
-        },
-      },
+      observation: latestRecovery
+        ? {
+            observationId: latestRecovery.id,
+            recordedAt: latestRecovery.recordedAt,
+            reportedByRole: latestRecovery.reportedByRole,
+            painScore: {
+              value: latestRecovery.painScore,
+              scale: 'NRS_0_TO_10',
+            },
+            mobilityStatus: latestRecovery.mobilityStatus,
+            woundCondition: latestRecovery.woundCondition,
+            symptoms: latestRecovery.symptoms || [],
+            patientNotes: latestRecovery.patientNotes,
+            vitals: {
+              temperature:
+                typeof latestVital?.temperatureC === 'number'
+                  ? { value: latestVital.temperatureC, unit: 'celsius' }
+                  : null,
+              heartRate:
+                typeof latestVital?.heartRateBpm === 'number'
+                  ? { value: latestVital.heartRateBpm, unit: 'bpm' }
+                  : null,
+              bloodPressure:
+                typeof latestVital?.systolicBp === 'number' && typeof latestVital?.diastolicBp === 'number'
+                  ? {
+                      systolic: latestVital.systolicBp,
+                      diastolic: latestVital.diastolicBp,
+                      unit: 'mmHg',
+                    }
+                  : null,
+              spO2:
+                typeof latestVital?.spO2Percent === 'number'
+                  ? { value: latestVital.spO2Percent, unit: 'percent' }
+                  : null,
+              drainOutput:
+                typeof latestVital?.drainOutputMl === 'number'
+                  ? { value: latestVital.drainOutputMl, unit: 'ml' }
+                  : null,
+            },
+          }
+        : null,
       historicalObservationsCount: recoveries.length,
       unverifiedDocumentCount: unverifiedCount,
       dataQuality: (() => {
@@ -678,13 +704,15 @@ Follow-up: Staple removal at day 14. DVT prophylaxis via Apixaban 2.5mg BID x14d
           warnings.push('No recovery observations have been logged for this patient yet.');
         }
 
-        if (!latestVital?.temperatureC) missingVitals.push('temperature');
-        if (!latestVital?.heartRateBpm) missingVitals.push('heartRate');
-        if (!latestVital?.systolicBp || !latestVital?.diastolicBp) missingVitals.push('bloodPressure');
-        if (!latestVital?.spO2Percent) missingVitals.push('spO2');
+        if (latestRecovery) {
+          if (typeof latestVital?.temperatureC !== 'number') missingVitals.push('temperature');
+          if (typeof latestVital?.heartRateBpm !== 'number') missingVitals.push('heartRate');
+          if (typeof latestVital?.systolicBp !== 'number' || typeof latestVital?.diastolicBp !== 'number') missingVitals.push('bloodPressure');
+          if (typeof latestVital?.spO2Percent !== 'number') missingVitals.push('spO2');
 
-        if (missingVitals.length > 0) {
-          warnings.push(`Missing vital sign measurements: ${missingVitals.join(', ')}.`);
+          if (missingVitals.length > 0) {
+            warnings.push(`Missing vital sign measurements: ${missingVitals.join(', ')}.`);
+          }
         }
 
         if (unverifiedCount > 0) {

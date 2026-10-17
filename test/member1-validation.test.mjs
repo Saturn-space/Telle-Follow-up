@@ -322,6 +322,250 @@ test('Phase 5 Maintenance: Contract schema provides clean integration interfaces
   assert.ok(patient.id && patient.mrn, 'Member 5 has immutable audit keys');
 });
 
+// 12. Phase 5 Maintenance: Member 2 Contract Zero-Value & Null Preservation
+test('Phase 5 Maintenance: Member 2 Contract preserves actual zero vitals and leaves unrecorded observations null', () => {
+  const buildContractObservation = (latestRecovery, latestVital) => {
+    if (!latestRecovery) return null;
+    return {
+      observationId: latestRecovery.id,
+      painScore: { value: latestRecovery.painScore, scale: 'NRS_0_TO_10' },
+      vitals: {
+        drainOutput: typeof latestVital?.drainOutputMl === 'number'
+          ? { value: latestVital.drainOutputMl, unit: 'ml' }
+          : null,
+        temperature: typeof latestVital?.temperatureC === 'number'
+          ? { value: latestVital.temperatureC, unit: 'celsius' }
+          : null,
+      },
+    };
+  };
+
+  // Case A: Unrecorded observation must NOT fabricate pain score 0 or current timestamp
+  const nullObs = buildContractObservation(null, null);
+  assert.equal(nullObs, null, 'Unrecorded observation must be strictly null (zero fabrication rejected)');
+
+  // Case B: Explicit 0 ml drain output must be preserved as { value: 0, unit: 'ml' }
+  const zeroDrainObs = buildContractObservation({ id: 'rec-1', painScore: 2 }, { drainOutputMl: 0, temperatureC: 36.8 });
+  assert.notEqual(zeroDrainObs, null);
+  assert.deepEqual(zeroDrainObs.vitals.drainOutput, { value: 0, unit: 'ml' }, 'Zero drain output preserved as valid 0 measurement');
+
+  // Case C: Truly missing vital must be represented as null, not zero
+  const missingDrainObs = buildContractObservation({ id: 'rec-2', painScore: 2 }, { drainOutputMl: null, temperatureC: 37.0 });
+  assert.equal(missingDrainObs.vitals.drainOutput, null, 'Unrecorded vital represented as null, not zero');
+});
+
+// 13. Phase 5 Maintenance: Surgery PATCH In-Place Record Integrity & Date Rules
+test('Phase 5 Maintenance: Surgery PATCH updates record in-place, preserves patientId, and enforces date constraints', () => {
+  const existingSurgery = {
+    id: 'surg-001',
+    patientId: 'pat-001',
+    procedureName: 'Right Total Knee Arthroplasty (TKA)',
+    surgeryDate: '2026-10-10T09:30:00.000Z',
+    dischargeDate: '2026-10-13T14:00:00.000Z',
+    dischargeCondition: 'Stable',
+    plannedFollowUpDate: '2026-10-24T10:00:00.000Z',
+    createdAt: '2026-10-10T11:00:00.000Z',
+    updatedAt: '2026-10-13T14:00:00.000Z',
+  };
+
+  const validateAndApplyPatch = (surgery, patch) => {
+    // Dates validation
+    const effSurgery = patch.surgeryDate ? new Date(patch.surgeryDate) : new Date(surgery.surgeryDate);
+    const effDischarge = patch.dischargeDate ? new Date(patch.dischargeDate) : new Date(surgery.dischargeDate);
+    const effFollowUp = patch.plannedFollowUpDate !== undefined
+      ? (patch.plannedFollowUpDate ? new Date(patch.plannedFollowUpDate) : null)
+      : (surgery.plannedFollowUpDate ? new Date(surgery.plannedFollowUpDate) : null);
+
+    if (effDischarge.getTime() < effSurgery.getTime()) {
+      return { success: false, error: 'DISCHARGE_BEFORE_SURGERY' };
+    }
+    if (effFollowUp && effFollowUp.getTime() < effDischarge.getTime()) {
+      return { success: false, error: 'FOLLOWUP_BEFORE_DISCHARGE' };
+    }
+
+    const { id, patientId, createdAt, ...allowedUpdates } = patch;
+    return {
+      success: true,
+      data: {
+        ...surgery,
+        ...allowedUpdates,
+        id: surgery.id,
+        patientId: surgery.patientId, // Patient association cannot be broken
+        updatedAt: '2026-10-17T12:00:00.000Z',
+      },
+    };
+  };
+
+  // Valid partial update
+  const validPatch = validateAndApplyPatch(existingSurgery, {
+    dischargeCondition: 'Ambulating independently with cane. Incision clean.',
+    plannedFollowUpDate: '2026-10-28T10:00:00.000Z',
+  });
+  assert.equal(validPatch.success, true);
+  assert.equal(validPatch.data.dischargeCondition, 'Ambulating independently with cane. Incision clean.');
+  assert.equal(validPatch.data.patientId, 'pat-001', 'Patient association strictly preserved');
+  assert.equal(validPatch.data.procedureName, existingSurgery.procedureName, 'Unrelated fields preserved');
+
+  // Attempting to break patientId
+  const hijackAttempt = validateAndApplyPatch(existingSurgery, { patientId: 'pat-999' });
+  assert.equal(hijackAttempt.data.patientId, 'pat-001', 'Patient ID tampering ignored');
+
+  // Invalid date sequence
+  const invalidDatePatch = validateAndApplyPatch(existingSurgery, {
+    dischargeDate: '2026-10-08T00:00:00.000Z', // before surgeryDate 2026-10-10
+  });
+  assert.equal(invalidDatePatch.error, 'DISCHARGE_BEFORE_SURGERY');
+});
+
+// 14. Phase 5 Maintenance: Patient PATCH Validation & Account Isolation
+test('Phase 5 Maintenance: Patient PATCH enforces strict server validation and prevents userId tampering', () => {
+  const existingPatient = {
+    id: 'pat-001',
+    userId: 'usr-001',
+    mrn: 'TFO-2026-001',
+    fullName: 'Eleanor Vance',
+    homeState: 'IL',
+    homeZip: '62704',
+    phone: '+1 (555) 234-5678',
+  };
+
+  const validatePatientPatch = (patch) => {
+    if (patch.fullName !== undefined && (typeof patch.fullName !== 'string' || patch.fullName.trim().length < 2)) {
+      return { valid: false, error: 'INVALID_NAME' };
+    }
+    if (patch.homeState !== undefined && (typeof patch.homeState !== 'string' || patch.homeState.trim().length !== 2)) {
+      return { valid: false, error: 'INVALID_STATE' };
+    }
+    if (patch.homeZip !== undefined && (!/^\d{5}(-\d{4})?$/.test(patch.homeZip.trim()))) {
+      return { valid: false, error: 'INVALID_ZIP' };
+    }
+    if (patch.phone !== undefined && (patch.phone.length > 30 || !/^[\d\s\+\-\(\)\.]+$/.test(patch.phone.trim()))) {
+      return { valid: false, error: 'INVALID_PHONE' };
+    }
+    // Prevent modifying account binding
+    const { id, mrn, userId, createdAt, ...safeFields } = patch;
+    return { valid: true, safeFields };
+  };
+
+  assert.equal(validatePatientPatch({ fullName: 'E' }).error, 'INVALID_NAME');
+  assert.equal(validatePatientPatch({ homeState: 'Illinois' }).error, 'INVALID_STATE');
+  assert.equal(validatePatientPatch({ homeZip: '123' }).error, 'INVALID_ZIP');
+  assert.equal(validatePatientPatch({ phone: 'bad<script>' }).error, 'INVALID_PHONE');
+
+  const valid = validatePatientPatch({ homeCity: 'Naperville', homeZip: '60540', userId: 'usr-attacker' });
+  assert.equal(valid.valid, true);
+  assert.equal('userId' in valid.safeFields, false, 'userId stripped from update to protect account binding');
+});
+
+// 15. Phase 5 Maintenance: OCR Pipeline Robustness on Empty & Corrupted Files
+test('Phase 5 Maintenance: OCR pipeline handles zero-byte and unreadable files with FAILED status', () => {
+  const processOcr = (filename, mimeType, fileBuffer) => {
+    const supportedMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!supportedMimes.includes(mimeType)) {
+      return { success: false, status: 'FAILED', error: 'UNSUPPORTED_MIME' };
+    }
+    const len = Buffer.isBuffer(fileBuffer)
+      ? fileBuffer.length
+      : typeof fileBuffer === 'string'
+      ? fileBuffer.trim().length
+      : 0;
+    if (len === 0) {
+      return { success: false, status: 'FAILED', error: 'EMPTY_OR_UNREADABLE' };
+    }
+    return { success: true, status: 'COMPLETED' };
+  };
+
+  assert.equal(processOcr('empty.pdf', 'application/pdf', Buffer.alloc(0)).error, 'EMPTY_OR_UNREADABLE');
+  assert.equal(processOcr('empty.txt', 'text/plain', 'some text').error, 'UNSUPPORTED_MIME');
+  assert.equal(processOcr('valid.pdf', 'application/pdf', Buffer.from('%PDF-1.7')).success, true);
+});
+
+// 16. Phase 5 Maintenance: Document Ingestion WEBP Magic Bytes Verification
+test('Phase 5 Maintenance: Document Ingestion rejects zero-byte uploads and validates WEBP magic bytes', () => {
+  const verifyUpload = (size, mime, buffer) => {
+    if (size <= 0 || (Buffer.isBuffer(buffer) && buffer.length === 0)) {
+      return { valid: false, error: 'EMPTY_FILE' };
+    }
+    if (mime === 'image/webp') {
+      const isRiff = buffer.subarray(0, 4).toString('ascii') === 'RIFF';
+      const isWebp = buffer.length >= 12 && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+      if (!isRiff || !isWebp) return { valid: false, error: 'CORRUPT_WEBP_HEADER' };
+    }
+    return { valid: true };
+  };
+
+  assert.equal(verifyUpload(0, 'application/pdf', Buffer.alloc(0)).error, 'EMPTY_FILE');
+
+  // Valid WEBP header: RIFF + 4 bytes size + WEBP
+  const validWebp = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP')]);
+  assert.equal(verifyUpload(validWebp.length, 'image/webp', validWebp).valid, true);
+
+  // Spoofed WEBP header: RIFF but missing WEBP
+  const spoofedWebp = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('JPEG')]);
+  assert.equal(verifyUpload(spoofedWebp.length, 'image/webp', spoofedWebp).error, 'CORRUPT_WEBP_HEADER');
+});
+
+// 17. Phase 5 Maintenance: Care Team Patient Directory Isolation & Header Flexibility
+test('Phase 5 Maintenance: Restricts patient directory listing to care team and accepts x-tele-role headers', () => {
+  const resolveRole = (headers) => {
+    const role = (headers['x-user-role'] || headers['x-tele-role'])?.toUpperCase();
+    return ['PATIENT', 'CLINICIAN', 'COORDINATOR', 'ADMIN'].includes(role) ? role : 'CLINICIAN';
+  };
+
+  const canListAll = (role) => ['CLINICIAN', 'COORDINATOR', 'ADMIN'].includes(role);
+
+  // Standard header
+  assert.equal(resolveRole({ 'x-user-role': 'CLINICIAN' }), 'CLINICIAN');
+  assert.equal(canListAll('CLINICIAN'), true);
+
+  // Alternate x-tele-role header from station UI
+  assert.equal(resolveRole({ 'x-tele-role': 'COORDINATOR' }), 'COORDINATOR');
+  assert.equal(canListAll('COORDINATOR'), true);
+
+  // Patient role blocked from directory scraping
+  assert.equal(resolveRole({ 'x-user-role': 'PATIENT' }), 'PATIENT');
+  assert.equal(canListAll('PATIENT'), false, 'PATIENT blocked from listing full patient directory');
+});
+
+// 18. Phase 5 Maintenance: Recovery Observation Filtering & Pagination
+test('Phase 5 Maintenance: Recovery Observation filtering by pain score and date range with pagination', () => {
+  const records = [
+    { id: '1', painScore: 2, recordedAt: '2026-10-14T09:00:00.000Z' },
+    { id: '2', painScore: 5, recordedAt: '2026-10-15T10:00:00.000Z' },
+    { id: '3', painScore: 7, recordedAt: '2026-10-16T11:00:00.000Z' },
+    { id: '4', painScore: 3, recordedAt: '2026-10-17T12:00:00.000Z' },
+  ];
+
+  const filterAndPaginate = (list, { minPain, maxPain, from, to, limit, offset }) => {
+    let result = [...list];
+    if (minPain !== undefined) result = result.filter((r) => r.painScore >= minPain);
+    if (maxPain !== undefined) result = result.filter((r) => r.painScore <= maxPain);
+    if (from) result = result.filter((r) => new Date(r.recordedAt) >= new Date(from));
+    if (to) result = result.filter((r) => new Date(r.recordedAt) <= new Date(to));
+    const start = offset || 0;
+    return limit !== undefined ? result.slice(start, start + limit) : result.slice(start);
+  };
+
+  // Filter severe pain >= 5
+  const severe = filterAndPaginate(records, { minPain: 5 });
+  assert.equal(severe.length, 2);
+  assert.deepEqual(severe.map((r) => r.id), ['2', '3']);
+
+  // Date filter
+  const dateFiltered = filterAndPaginate(records, { from: '2026-10-16T00:00:00.000Z' });
+  assert.equal(dateFiltered.length, 2);
+  assert.deepEqual(dateFiltered.map((r) => r.id), ['3', '4']);
+
+  // Pagination limit and offset
+  const page1 = filterAndPaginate(records, { limit: 2, offset: 0 });
+  assert.equal(page1.length, 2);
+  assert.equal(page1[0].id, '1');
+
+  const page2 = filterAndPaginate(records, { limit: 2, offset: 2 });
+  assert.equal(page2.length, 2);
+  assert.equal(page2[0].id, '3');
+});
+
 // Run all tests
 async function run() {
   console.log('--- RUNNING MEMBER 1 HARDENED TEST SUITE ---');

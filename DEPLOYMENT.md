@@ -155,3 +155,32 @@ Expected Response:
 * **Member 3 (Healthcare Directory):** Patient home location (`homeCity`, `homeState`, `homeZip`) and surgical specialty for nearby provider matching.
 * **Member 4 (Travel Optimization):** Distance disparity between operating hospital (`hospitalCity`, `hospitalState`) and patient residence (`homeCity`, `homeState`).
 * **Member 5 (Follow-Up & Teleconsultation):** Stable `Patient.id`, `Surgery.id`, and `plannedFollowUpDate` for appointment scheduling.
+
+---
+
+## 9. Phase 5 Post-Release Maintenance & Reliability Notes
+
+During Phase 5 maintenance inspections, the following genuine defects were identified and resolved:
+
+1. **Member 2 Contract Data Integrity & Zero Preservation:**
+   - **Root Cause:** When no recovery observation was recorded for a patient, `getMember2RiskContract` previously substituted a fabricated observation with `painScore: 0`, `reportedByRole: 'PATIENT'`, and current timestamp `new Date().toISOString()`. Additionally, if a valid measurement was zero (e.g., `drainOutputMl: 0`), JavaScript truthiness checks converted it to `null`.
+   - **Resolution:** When no observation exists, `observation` is strictly `null` (with `freshness: 'NONE'`, `isStale: true`, and data quality warnings). Valid numerical zero measurements are preserved (`{ value: 0, unit: 'ml' }`).
+2. **Surgery In-Place Modification (PATCH):**
+   - **Root Cause:** Editing a surgical profile previously re-submitted a `POST` request, creating duplicate records instead of updating the existing surgery.
+   - **Resolution:** Implemented `PATCH /api/v1/patients/[id]/surgeries`, updating `SurgicalProfileView.tsx` to update in-place while enforcing date sequence rules (`dischargeDate >= surgeryDate`, `plannedFollowUpDate >= dischargeDate`) and preserving `patientId` binding.
+3. **Patient Profile Update Server-Side Validation:**
+   - **Root Cause:** `PATCH /api/v1/patients/[id]` previously lacked server validation, allowing invalid phone numbers, non-2-letter state codes, invalid ZIP codes, future dates of birth, and potential tampering with `userId`.
+   - **Resolution:** Added field-level validation and stripped `userId`, `mrn`, `id`, and `createdAt` from updates.
+4. **Patient Directory Listing RBAC Isolation:**
+   - **Root Cause:** `GET /api/v1/patients` lacked role authorization, enabling unprivileged `PATIENT` roles to list the entire clinic directory.
+   - **Resolution:** Restricts full directory browsing to care team roles (`CLINICIAN`, `COORDINATOR`, `ADMIN`). When accessed by a `PATIENT`, output is isolated strictly to their own authenticated record.
+5. **Document Ingestion Robustness & Anti-Spoofing:**
+   - **Root Cause:** Zero-byte empty files were accepted, and WEBP uploads lacked magic-byte header inspection.
+   - **Resolution:** Rejects empty uploads (`400 EMPTY_FILE`) and validates WEBP binary header signatures (`RIFF....WEBP`).
+6. **OCR Service Resilience on Corrupted/Empty Buffers:**
+   - **Root Cause:** `OcrService.processDocument` returned a successful simulated output even for empty or corrupted payloads.
+   - **Resolution:** Validates buffer length and format, returning `status: 'FAILED'` with diagnostic errors on empty/unreadable inputs.
+7. **Frontend/Backend Header Synchronization:**
+   - **Root Cause:** `DocumentOcrStation.tsx` sent `x-tele-role` headers while `AuthGuard` checked `x-user-role`.
+   - **Resolution:** Extended `AuthGuard` to accept both header standards and aligned frontend requests.
+

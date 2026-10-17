@@ -17,9 +17,11 @@ export class AuthGuard {
    * Standard headers: 'x-user-id', 'x-user-role', 'x-patient-id'
    */
   public static getAuthContext(req: NextRequest): AuthContext {
-    const roleHeader = req.headers.get('x-user-role')?.toUpperCase() as UserRole | undefined;
-    const userIdHeader = req.headers.get('x-user-id');
-    const patientIdHeader = req.headers.get('x-patient-id');
+    const roleHeader = (
+      req.headers.get('x-user-role') || req.headers.get('x-tele-role')
+    )?.toUpperCase() as UserRole | undefined;
+    const userIdHeader = req.headers.get('x-user-id') || req.headers.get('x-tele-user-id');
+    const patientIdHeader = req.headers.get('x-patient-id') || req.headers.get('x-tele-patient-id');
 
     // Default to CLINICIAN for development if unprovided, or parse provided headers
     const role: UserRole = roleHeader && ['PATIENT', 'CLINICIAN', 'COORDINATOR', 'ADMIN'].includes(roleHeader)
@@ -34,6 +36,14 @@ export class AuthGuard {
       role,
       patientId,
     };
+  }
+
+  /**
+   * Verifies if user has permission to list the full patient directory.
+   * Restricts directory browsing to care team roles (CLINICIAN, COORDINATOR, ADMIN).
+   */
+  public static canListAllPatients(auth: AuthContext): boolean {
+    return ['CLINICIAN', 'COORDINATOR', 'ADMIN'].includes(auth.role);
   }
 
   /**

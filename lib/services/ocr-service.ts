@@ -49,6 +49,27 @@ export class OcrService {
       };
     }
 
+    // Check for empty or unreadable document payload
+    const bufferLength = Buffer.isBuffer(fileBuffer)
+      ? fileBuffer.length
+      : typeof fileBuffer === 'string'
+      ? fileBuffer.trim().length
+      : 0;
+
+    if (bufferLength === 0) {
+      return {
+        success: false,
+        status: 'FAILED',
+        rawExtractedText: '',
+        extractedMetadata: {
+          documentTypeDetected: 'EMPTY_OR_UNREADABLE',
+          clinicalKeywords: [],
+          confidenceScore: 0.0,
+        },
+        error: 'Document payload is empty or zero-byte. Cannot perform optical entity extraction on unreadable file.',
+      };
+    }
+
     // Realistic clinical extraction tailored to post-op discharge summaries and lab diagnostics
     const isLab = filename.toLowerCase().includes('lab') || filename.toLowerCase().includes('blood') || filename.toLowerCase().includes('cbc');
     const isWound = filename.toLowerCase().includes('wound') || filename.toLowerCase().includes('photo');
