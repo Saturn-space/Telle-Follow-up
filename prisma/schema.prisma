@@ -1,6 +1,13 @@
 // Tele-Follow-Up Orchestrator - Shared Database Schema
 // Shared PostgreSQL Database with Prisma ORM
 // Member 1 Slice: Patient Registration, Surgery, Discharge, Recovery Monitoring, Documents & OCR
+// Tele-Follow-Up Orchestrator - Shared Prisma Schema
+// Module: Member 2 - AI Risk Prediction & Clinical Decision Support
+// Integrates with: Member 1 (Patient & Recovery), Member 4 (Travel), Member 5 (Follow-Up)
+
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
@@ -14,6 +21,14 @@ generator client {
 enum Role {
   PATIENT
   CLINICIAN
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  PATIENT
+  SURGEON
+  LOCAL_DOCTOR
   COORDINATOR
   ADMIN
 }
@@ -161,4 +176,212 @@ model OcrExtraction {
 
   @@index([documentId])
   @@index([status])
+enum RiskLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+  INDETERMINATE
+}
+
+enum ReviewStatus {
+  PENDING_REVIEW
+  ACCEPTED
+  OVERRIDDEN
+  REJECTED
+}
+
+enum AssessmentEngine {
+  DETERMINISTIC_RULES_V1
+  CLAUDE_CDS_HYBRID_V1
+  FALLBACK_HEURISTIC
+}
+
+enum FactorImpact {
+  NORMAL_BASELINE
+  MODERATE_ELEVATION
+  HIGH_RISK_FACTOR
+  CRITICAL_TRIGGER
+}
+
+// -----------------------------------------------------------------------------
+// MEMBER 1 UPSTREAM SHARED MODELS (Contract Placeholders)
+// -----------------------------------------------------------------------------
+
+model Patient {
+  id              String           @id @default(uuid())
+  mrn             String           @unique
+  fullName        String
+  dateOfBirth     DateTime
+  gender          String
+  primaryPhone    String
+  primaryState    String
+  originalHospital String
+  surgeries       SurgeryRecord[]
+  recoveryLogs    RecoveryLog[]
+  riskAssessments RiskAssessment[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model SurgeryRecord {
+  id              String        @id @default(uuid())
+  patientId       String
+  patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  procedureName   String
+  surgeryDate     DateTime
+  dischargeDate   DateTime
+  surgeonName     String
+  operatingCenter String
+  postOpDays      Int           @default(0)
+  recoveryLogs    RecoveryLog[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model RecoveryLog {
+  id              String           @id @default(uuid())
+  patientId       String
+  patient         Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  surgeryRecordId String?
+  surgeryRecord   SurgeryRecord?   @relation(fields: [surgeryRecordId], references: [id], onDelete: SetNull)
+  postOpDay       Int
+  logTimestamp    DateTime         @default(now())
+  
+  // Vitals
+  systolicBP      Int?
+  diastolicBP     Int?
+  heartRate       Int?
+  temperatureC    Float?
+  respiratoryRate Int?
+  oxygenSat       Float?
+  
+  // Patient Reported Outcomes
+  painScore       Int              // 0-10
+  mobilityLevel   String?          // e.g. "BEDREST", "AMBULATING_WITH_ASSISTANCE", "INDEPENDENT"
+  symptoms        String[]         @default([])
+  woundDescription String?
+  drainOutputMl   Int?
+  
+  // Verification flags (Member 1 OCR status)
+  isVerified      Boolean          @default(false)
+  
+  riskAssessments RiskAssessment[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// MEMBER 2 - AI RISK PREDICTION & CLINICAL DECISION SUPPORT
+// -----------------------------------------------------------------------------
+
+model RiskAssessment {
+  id               String           @id @default(uuid())
+  patientId        String
+  patient          Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recoveryLogId    String?
+  recoveryLog      RecoveryLog?     @relation(fields: [recoveryLogId], references: [id], onDelete: SetNull)
+  
+  // Engine Provenance
+  engine           AssessmentEngine @default(CLAUDE_CDS_HYBRID_V1)
+  engineVersion    String           @default("1.0.0")
+  inputDataHash    String           // SHA256 snapshot of inputs for medical auditability
+  
+  // Calculated Risk Category
+  riskLevel        RiskLevel        @default(INDETERMINATE)
+  heuristicScore   Float            @default(0.0) // 0-100 advisory heuristic score
+  requiresInPerson Boolean          @default(false)
+  
+  // Plain Language Explanations & Limitations
+  clinicalSummary  String           @db.Text
+  factorsJson      Json             // Detailed array of contributing factors
+  missingDataJson  Json             // Array of missing data flags
+  limitationsJson  Json             // Known limitations and medical disclaimers
+  
+  // Urgent Escalation (Priority over travel optimization)
+  isEscalated      Boolean          @default(false)
+  escalationReason String?          @db.Text
+  
+  // AI Service Execution Metadata
+  aiStatus         String           @default("UNCONFIGURED") // SUCCESS, UNCONFIGURED, FAILED, SKIPPED
+  aiModelName      String?
+  aiResponseTimeMs Int?
+  
+  // Human Clinician Review
+  reviewStatus     ReviewStatus     @default(PENDING_REVIEW)
+  reviewedById     String?
+  reviewedByName   String?
+  reviewedAt       DateTime?
+  clinicianNotes   String?          @db.Text
+  overrideLevel    RiskLevel?
+  
+  // Relational sub-records
+  contributingFactors RiskFactor[]
+  clinicalAlerts      ClinicalAlert[]
+  reviews             ClinicianReview[]
+  
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([patientId, createdAt])
+  @@index([reviewStatus])
+  @@index([isEscalated])
+  @@index([riskLevel])
+}
+
+model RiskFactor {
+  id               String         @id @default(uuid())
+  assessmentId     String
+  assessment       RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  
+  category         String         // "VITALS", "WOUND", "PAIN", "MOBILITY", "SYSTEMIC"
+  factorTitle      String
+  description      String         @db.Text
+  impact           FactorImpact   @default(NORMAL_BASELINE)
+  sourceFieldRef   String         // e.g. "RecoveryLog.temperatureC"
+  observedValue    String?
+  referenceRange   String?
+  
+  createdAt        DateTime       @default(now())
+
+  @@index([assessmentId])
+}
+
+model ClinicalAlert {
+  id               String         @id @default(uuid())
+  assessmentId     String
+  assessment       RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  
+  alertType        String         // "RED_FLAG", "MISSING_DATA", "STALE_DATA", "AI_OUTAGE"
+  severity         String         // "INFO", "WARNING", "CRITICAL"
+  headline         String
+  detailedMessage  String         @db.Text
+  acknowledged     Boolean        @default(false)
+  acknowledgedBy   String?
+  acknowledgedAt   DateTime?
+  
+  createdAt        DateTime       @default(now())
+
+  @@index([assessmentId])
+  @@index([severity])
+}
+
+model ClinicianReview {
+  id               String         @id @default(uuid())
+  assessmentId     String
+  assessment       RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  
+  reviewerId       String
+  reviewerName     String
+  reviewerRole     String         // "SURGEON", "LOCAL_DOCTOR", "COORDINATOR"
+  decision         ReviewStatus   // ACCEPTED, OVERRIDDEN, REJECTED
+  originalLevel    RiskLevel
+  finalLevel       RiskLevel
+  clinicalNotes    String         @db.Text
+  escalationRaised Boolean        @default(false)
+  
+  reviewedAt       DateTime       @default(now())
+
+  @@index([assessmentId])
+  @@index([reviewerId])
 }
