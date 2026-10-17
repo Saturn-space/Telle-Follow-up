@@ -1,0 +1,6 @@
+{
+  "name": "Tele-Follow-Up Orchestrator",
+  "description": "An AI-Assisted Post-Surgical Follow-Up Coordination System to optimize recovery monitoring, risk assessment, local care discovery, and follow-up teleconsultation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
