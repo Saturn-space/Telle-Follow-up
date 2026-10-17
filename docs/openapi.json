@@ -1,0 +1,220 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Tele-Follow-Up Orchestrator API",
+    "description": "REST API contracts for Post-Surgical Follow-Up Coordination, Jitsi Video Sessions, and Integration.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development / Next.js Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "UserRoleHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-user-role",
+        "description": "User Role (PATIENT, CLINICIAN, COORDINATOR, ADMIN)"
+      },
+      "UserIdHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-user-id",
+        "description": "User or Patient Identifier"
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "type": "object" },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "details": { "type": "object" }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "timestamp": { "type": "string", "format": "date-time" },
+              "requestId": { "type": "string" }
+            }
+          }
+        },
+        "required": ["success"]
+      },
+      "FollowUpPlan": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "patientId": { "type": "string" },
+          "riskAssessmentId": { "type": "string", "nullable": true },
+          "travelComparisonId": { "type": "string", "nullable": true },
+          "title": { "type": "string" },
+          "clinicalSummary": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"]
+          },
+          "approvedByClinician": { "type": "string", "nullable": true },
+          "approvedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "startDate": { "type": "string", "format": "date-time" },
+          "targetCompletionDate": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "patientId", "title", "clinicalSummary", "status", "startDate"]
+      },
+      "Appointment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "planId": { "type": "string" },
+          "patientId": { "type": "string" },
+          "providerId": { "type": "string", "nullable": true },
+          "type": {
+            "type": "string",
+            "enum": ["TELECONSULTATION", "LOCAL_CLINIC_VISIT", "HOSPITAL_RETURN", "DIAGNOSTIC_LAB"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PROPOSED", "SCHEDULED", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "RESCHEDULED", "CANCELLED", "NO_SHOW"]
+          },
+          "scheduledStartTime": { "type": "string", "format": "date-time" },
+          "scheduledEndTime": { "type": "string", "format": "date-time" },
+          "locationOrService": { "type": "string" },
+          "clinicalNotes": { "type": "string", "nullable": true },
+          "cancellationReason": { "type": "string", "nullable": true }
+        },
+        "required": ["id", "planId", "patientId", "type", "status", "scheduledStartTime", "scheduledEndTime", "locationOrService"]
+      },
+      "TeleconsultationSession": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "planId": { "type": "string" },
+          "appointmentId": { "type": "string" },
+          "roomName": { "type": "string", "description": "Unguessable random hex, zero PII" },
+          "domain": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "READY", "ACTIVE", "COMPLETED", "FAILED", "EXPIRED"]
+          }
+        },
+        "required": ["id", "appointmentId", "roomName", "domain", "status"]
+      },
+      "ConsultationRecord": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "appointmentId": { "type": "string" },
+          "teleSessionId": { "type": "string", "nullable": true },
+          "clinicianId": { "type": "string" },
+          "subjectiveNotes": { "type": "string" },
+          "objectiveFindings": { "type": "string", "nullable": true },
+          "assessmentPlan": { "type": "string" },
+          "followUpRequired": { "type": "boolean" },
+          "nextFollowUpDate": { "type": "string", "format": "date-time", "nullable": true },
+          "completedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "appointmentId", "clinicianId", "subjectiveNotes", "assessmentPlan"]
+      }
+    }
+  },
+  "paths": {
+    "/api/followup/plans": {
+      "get": {
+        "summary": "List follow-up care plans",
+        "parameters": [
+          { "name": "patientId", "in": "query", "schema": { "type": "string" }, "required": false }
+        ],
+        "responses": {
+          "200": { "description": "Plans retrieved successfully" },
+          "403": { "description": "Cross-patient unauthorized access" }
+        }
+      },
+      "post": {
+        "summary": "Create a new follow-up care plan",
+        "description": "Requires CLINICIAN, COORDINATOR, or ADMIN role. High-risk patients trigger 409 Conflict.",
+        "responses": {
+          "201": { "description": "Plan created" },
+          "400": { "description": "Validation error" },
+          "403": { "description": "Unauthorized role" },
+          "409": { "description": "Clinical safety escalation override" }
+        }
+      }
+    },
+    "/api/followup/appointments": {
+      "get": {
+        "summary": "List appointments for a patient or plan",
+        "parameters": [
+          { "name": "patientId", "in": "query", "schema": { "type": "string" } },
+          { "name": "planId", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Appointments list" }
+        }
+      },
+      "post": {
+        "summary": "Schedule an appointment under an active plan",
+        "responses": {
+          "201": { "description": "Appointment scheduled & teleconsult provisioned" },
+          "400": { "description": "Validation error, schedule conflict, or invalid provider" },
+          "403": { "description": "Role unauthorized" }
+        }
+      }
+    },
+    "/api/followup/appointments/{id}": {
+      "patch": {
+        "summary": "Reschedule or cancel an appointment",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Appointment updated" },
+          "400": { "description": "Missing cancellation reason or invalid new dates" },
+          "403": { "description": "Patient attempted forbidden status transition" },
+          "404": { "description": "Appointment not found" }
+        }
+      }
+    },
+    "/api/teleconsult/records": {
+      "post": {
+        "summary": "Record clinical consultation outcome and complete appointment",
+        "description": "Restricted strictly to users with CLINICIAN role.",
+        "responses": {
+          "201": { "description": "Clinical outcome recorded; appointment status set to COMPLETED" },
+          "400": { "description": "Missing notes or cancelled appointment" },
+          "403": { "description": "Non-clinician role rejected" }
+        }
+      }
+    },
+    "/api/payments/verify": {
+      "post": {
+        "summary": "Server-side timing-safe HMAC-SHA256 signature verification",
+        "responses": {
+          "200": { "description": "Signature verified; order status set to CAPTURED" },
+          "400": { "description": "Invalid signature or tampered payload" }
+        }
+      }
+    },
+    "/api/integration/cross-module": {
+      "get": {
+        "summary": "Aggregated cross-module view (Members 1 through 5)",
+        "parameters": [
+          { "name": "patientId", "in": "query", "schema": { "type": "string" }, "required": false }
+        ],
+        "responses": {
+          "200": { "description": "Combined state across 5 modules" }
+        }
+      }
+    }
+  }
+}
