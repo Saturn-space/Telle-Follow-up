@@ -1,112 +1,134 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { store } from '@/lib/server/store';
-import { FollowUpService } from '@/lib/server/followup-service';
-import { CreatePlanSchema, ApiResponse } from '@/lib/types/followup';
-import { getAuthContext, checkRolePermission, checkPatientAccess } from '@/lib/server/auth-guard';
+import { z } from 'zod';
+import { FollowUpPlanStatus } from '@/generated/prisma';
+import { prisma } from '@/lib/prisma';
+import { getVerifiedAuthContext } from '@/lib/server/auth-guard';
+import { AccessError, requireAuthenticated, requirePatientAccess, requireRoles } from '@/lib/server/db-access';
 
-export async function GET(req: NextRequest) {
+export const runtime = 'nodejs';
+
+const createSchema = z.object({
+  patientId: z.string().min(1).max(128),
+  title: z.string().trim().min(3).max(200),
+  clinicalSummary: z.string().trim().min(5).max(4000),
+  riskAssessmentId: z.string().optional(),
+  travelComparisonId: z.string().optional(),
+  startDate: z.coerce.date(),
+  targetCompletionDate: z.coerce.date().optional(),
+});
+
+function errorResponse(error: unknown) {
+  if (error instanceof AccessError) return NextResponse.json({ success: false, error: { code: error.status === 401 ? 'UNAUTHORIZED' : error.status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: error.message } }, { status: error.status });
+  return null;
+}
+
+export async function GET(request: NextRequest) {
   try {
-    const context = getAuthContext(req);
-    const { searchParams } = new URL(req.url);
-    const patientId = searchParams.get('patientId') || undefined;
-
-    // Cross-patient access protection: A patient can only view their own plans
-    if (patientId) {
-      const access = checkPatientAccess(context, patientId);
-      if (!access.allowed) {
-        return NextResponse.json(
-          { success: false, error: { code: 'FORBIDDEN', message: access.error } },
-          { status: 403 }
-        );
-      }
-    } else if (context.role === 'PATIENT') {
-      // If no query param and user is patient, constrain strictly to their own ID
-      const patientPlans = store.getAllPlans(context.userId);
-      return NextResponse.json({
-        success: true,
-        data: patientPlans,
-        meta: { timestamp: new Date().toISOString() },
-      });
+    const context = await getVerifiedAuthContext(request);
+    requireAuthenticated(context);
+    const params = new URL(request.url).searchParams;
+    let patientId = params.get('patientId') || undefined;
+    if (context.role === 'PATIENT') {
+      const patient = await prisma.patient.findUnique({ where: { userId: context.userId }, select: { id: true } });
+      if (!patient || (patientId && patientId !== patient.id)) throw new AccessError('Patients may access only their own care plans.', 403);
+      patientId = patient.id;
+    } else if (patientId) {
+      await requirePatientAccess(context, patientId);
+    } else if (context.role === 'CLINICIAN') {
+      patientId = undefined;
     }
 
-    const plans = store.getAllPlans(patientId);
-
-    const response: ApiResponse = {
-      success: true,
-      data: plans,
-      meta: { timestamp: new Date().toISOString() },
+    const page = Math.max(1, Number(params.get('page') || 1) || 1);
+    const limit = Math.min(100, Math.max(1, Number(params.get('limit') || 25) || 25));
+    const where = {
+      patientId,
+      approvedByClinicianId: context.role === 'CLINICIAN' ? context.userId : undefined,
     };
-    return NextResponse.json(response);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown server error';
-    return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message } },
-      { status: 500 }
-    );
+    const [plans, total] = await prisma.$transaction([
+      prisma.followUpPlan.findMany({
+        where,
+        include: {
+          appointments: {
+            include: {
+              facility: true,
+              ...(context.role === 'PATIENT' || context.role === 'CLINICIAN' ? { teleSession: true } : {}),
+              outcomeRecord: true,
+            },
+          },
+          riskAssessment: true,
+          travelComparison: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.followUpPlan.count({ where }),
+    ]);
+    return NextResponse.json({ success: true, data: plans, meta: { total, page, limit } });
+  } catch (error) {
+    const response = errorResponse(error);
+    if (response) return response;
+    console.error('[followup/plans] Query failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'DATABASE_UNAVAILABLE', message: 'Follow-up plans could not be loaded.' } }, { status: 503 });
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const context = getAuthContext(req);
+    const context = await getVerifiedAuthContext(request);
+    requireRoles(context, ['CLINICIAN', 'COORDINATOR', 'ADMIN']);
+    const parsed = createSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Plan details are invalid.', details: parsed.error.flatten() } }, { status: 400 });
+    const input = parsed.data;
+    if (input.targetCompletionDate && input.targetCompletionDate < input.startDate) {
+      return NextResponse.json({ success: false, error: { code: 'INVALID_DATE_RANGE', message: 'Target completion date must be on or after the start date.' } }, { status: 400 });
+    }
+    await requirePatientAccess(context, input.patientId, { allowUnassignedClinician: true });
 
-    // Only Clinicians, Coordinators, and Admins can create follow-up plans
-    const perm = checkRolePermission(context, ['CLINICIAN', 'COORDINATOR', 'ADMIN']);
-    if (!perm.allowed) {
-      return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: perm.error } },
-        { status: 403 }
-      );
+    const risk = input.riskAssessmentId
+      ? await prisma.riskAssessment.findUnique({ where: { id: input.riskAssessmentId } })
+      : await prisma.riskAssessment.findFirst({ where: { patientId: input.patientId }, orderBy: { createdAt: 'desc' } });
+    if (!risk || risk.patientId !== input.patientId || risk.reviewStatus === 'PENDING_REVIEW') {
+      return NextResponse.json({ success: false, error: { code: 'RISK_REVIEW_REQUIRED', message: 'A current clinician-reviewed risk assessment is required before creating a care plan.' } }, { status: 409 });
+    }
+    if (risk.createdAt.getTime() < Date.now() - 48 * 60 * 60 * 1000) {
+      return NextResponse.json({ success: false, error: { code: 'RISK_REVIEW_STALE', message: 'The risk assessment is older than 48 hours and requires a new clinician review.' } }, { status: 409 });
+    }
+    if (risk.isEscalated || risk.riskLevel === 'HIGH' || risk.riskLevel === 'CRITICAL') {
+      return NextResponse.json({ success: false, error: { code: 'CLINICAL_ESCALATION_OVERRIDE', message: 'Routine follow-up planning is suspended for this elevated risk state.' } }, { status: 409 });
     }
 
-    const body = await req.json();
-    const parsed = CreatePlanSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid plan input data.',
-            details: parsed.error.format(),
-          },
-        },
-        { status: 400 }
-      );
+    let travelComparisonId: string | undefined;
+    if (input.travelComparisonId) {
+      const comparison = await prisma.travelComparison.findUnique({ where: { id: input.travelComparisonId }, select: { id: true, patientId: true } });
+      if (!comparison || comparison.patientId !== input.patientId) return NextResponse.json({ success: false, error: { code: 'INVALID_TRAVEL_COMPARISON', message: 'The travel comparison does not belong to this patient.' } }, { status: 400 });
+      travelComparisonId = comparison.id;
     }
 
-    const result = FollowUpService.createPlan({
-      ...parsed.data,
-      approvedByClinician:
-        parsed.data.approvedByClinician || (context.role === 'CLINICIAN' ? context.userId : undefined),
+    const clinician = context.role === 'CLINICIAN'
+      ? await prisma.user.findUnique({ where: { id: context.userId }, select: { email: true } })
+      : null;
+    const plan = await prisma.followUpPlan.create({
+      data: {
+        patientId: input.patientId,
+        riskAssessmentId: risk.id,
+        travelComparisonId,
+        title: input.title,
+        clinicalSummary: input.clinicalSummary,
+        status: context.role === 'CLINICIAN' ? FollowUpPlanStatus.ACTIVE : FollowUpPlanStatus.DRAFT,
+        approvedByClinician: clinician?.email,
+        approvedByClinicianId: clinician?.email ? context.userId : undefined,
+        approvedAt: clinician ? new Date() : undefined,
+        startDate: input.startDate,
+        targetCompletionDate: input.targetCompletionDate,
+      },
+      include: { riskAssessment: true, travelComparison: true, appointments: true },
     });
-
-    if (result.error) {
-      const status = result.isEscalated ? 409 : 400; // 409 Conflict if Clinical Safety Escalation blocks it
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: result.isEscalated ? 'CLINICAL_ESCALATION_OVERRIDE' : 'BAD_REQUEST',
-            message: result.error,
-          },
-        },
-        { status }
-      );
-    }
-
-    const response: ApiResponse = {
-      success: true,
-      data: result.plan,
-      meta: { timestamp: new Date().toISOString() },
-    };
-    return NextResponse.json(response, { status: 201 });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown server error';
-    return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message } },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, data: plan }, { status: 201 });
+  } catch (error) {
+    const response = errorResponse(error);
+    if (response) return response;
+    console.error('[followup/plans] Save failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'PLAN_SAVE_UNAVAILABLE', message: 'The follow-up plan could not be saved.' } }, { status: 503 });
   }
 }

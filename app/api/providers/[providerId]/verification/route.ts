@@ -1,149 +1,71 @@
-// ============================================================================
-// API ROUTE: /api/providers/[providerId]/verification (HARDENED - PHASE 3)
-// POST: Record an authorized clinical verification audit entry and update status
-// Guardrails: Strict Role Enforcement, Audit Evidence Validation, State Transition Checks
-// ============================================================================
-
 import { NextRequest, NextResponse } from 'next/server';
-import { providerRepository } from '@/lib/db/provider-repository';
-import { VerificationStatus } from '@/lib/types/provider';
+import { z } from 'zod';
+import { ProviderDataSource, VerificationStatus } from '@/generated/prisma';
+import { prisma } from '@/lib/prisma';
+import { getVerifiedAuthContext } from '@/lib/server/auth-guard';
+import { AccessError, requireRoles } from '@/lib/server/db-access';
 
-interface RouteParams {
-  params: Promise<{
-    providerId: string;
-  }>;
-}
+const verificationSchema = z.object({
+  status: z.enum(['VERIFIED', 'UNVERIFIED']),
+  evidenceNotes: z.string().trim().min(20).max(4000),
+  registryLicenseNo: z.string().trim().min(3).max(120).optional(),
+});
 
-const VALID_STATUSES: VerificationStatus[] = [
-  'VERIFIED',
-  'UNVERIFIED',
-  'PENDING_REVIEW',
-  'SEEDED_DEMO',
-];
-
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ providerId: string }> }) {
   try {
+    const context = await getVerifiedAuthContext(request);
+    requireRoles(context, ['ADMIN']);
     const { providerId } = await params;
-
-    if (!providerId || typeof providerId !== 'string' || providerId.trim().length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_ID',
-            message: 'A valid providerId path parameter is required.',
-          },
-        },
-        { status: 400 }
-      );
+    const parsed = verificationSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Verification evidence is incomplete.', details: parsed.error.flatten() } }, { status: 400 });
+    if (parsed.data.status === 'VERIFIED' && !parsed.data.registryLicenseNo) {
+      return NextResponse.json({ success: false, error: { code: 'LICENSE_REQUIRED', message: 'A registry license number is required before recording a verified status.' } }, { status: 400 });
     }
 
-    // 1. Strict Role Authorization
-    const roleHeader = request.headers.get('x-user-role');
-    const isAuthorized = roleHeader === 'ADMIN' || roleHeader === 'COORDINATOR';
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FORBIDDEN',
-            message: 'Access denied: Only clinical administrators and coordinators with verified credentials can modify verification status.',
-          },
-        },
-        { status: 403 }
-      );
+    const existingFacility = await prisma.healthcareFacility.findUnique({ where: { id: providerId }, select: { dataSource: true } });
+    if (!existingFacility) return NextResponse.json({ success: false, error: { code: 'FACILITY_NOT_FOUND', message: 'Facility was not found.' } }, { status: 404 });
+    if (parsed.data.status === 'VERIFIED' && existingFacility.dataSource === ProviderDataSource.SYNTHETIC_SEED) {
+      return NextResponse.json({ success: false, error: { code: 'SYNTHETIC_DEMO_CANNOT_BE_VERIFIED', message: 'Synthetic demo listings cannot be marked as verified providers.' } }, { status: 409 });
     }
 
-    const body = await request.json();
-
-    // 2. Status Validation
-    if (!body.status || !VALID_STATUSES.includes(body.status)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_STATUS',
-            message: `Verification status must be one of: ${VALID_STATUSES.join(', ')}.`,
-          },
+    const facility = await prisma.$transaction(async (tx) => {
+      await tx.providerVerificationRecord.create({
+        data: {
+          facilityId: providerId,
+          status: parsed.data.status as VerificationStatus,
+          verifierUserId: context.userId,
+          evidenceNotes: parsed.data.evidenceNotes,
+          registryLicenseNo: parsed.data.registryLicenseNo,
         },
-        { status: 400 }
-      );
-    }
-
-    // 3. Mandatory Evidence Notes (At least 10 characters explaining method of clinical audit)
-    if (!body.evidenceNotes || typeof body.evidenceNotes !== 'string' || body.evidenceNotes.trim().length < 10) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INSUFFICIENT_EVIDENCE',
-            message: 'Mandatory clinical audit notes of at least 10 characters are required detailing how the facility was inspected or verified.',
-          },
+      });
+      const updated = await tx.healthcareFacility.update({
+        where: { id: providerId },
+        data: {
+          verificationStatus: parsed.data.status as VerificationStatus,
+          lastVerifiedAt: parsed.data.status === 'VERIFIED' ? new Date() : null,
+          dataSource: parsed.data.status === 'VERIFIED' ? 'OFFICIAL_REGISTRY' : undefined,
         },
-        { status: 400 }
-      );
-    }
-
-    // 4. Special Rule for 'VERIFIED': Check registry or license number format if provided
-    if (body.status === 'VERIFIED' && body.registryLicenseNo && body.registryLicenseNo.trim().length < 3) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_LICENSE',
-            message: 'Provided state medical/clinical registry license number must be at least 3 characters.',
-          },
+        include: { services: true, verifications: { orderBy: { verifiedAt: 'desc' }, take: 1 } },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: context.userId,
+          userEmail: context.email,
+          userRole: context.role,
+          action: 'PROVIDER_VERIFICATION',
+          entityType: 'HEALTHCARE_FACILITY',
+          entityId: providerId,
+          details: `Facility status recorded as ${parsed.data.status}.`,
         },
-        { status: 400 }
-      );
-    }
-
-    const verifierUserId =
-      body.verifierUserId ||
-      request.headers.get('x-user-id') ||
-      (roleHeader === 'ADMIN' ? 'coord_dr_sharma_admin' : 'coord_dr_deshmukh');
-
-    const updatedFacility = providerRepository.recordVerification(providerId, {
-      status: body.status,
-      evidenceNotes: body.evidenceNotes.trim(),
-      registryLicenseNo: body.registryLicenseNo?.trim() || undefined,
-      verifierUserId,
+      });
+      return updated;
     });
-
-    if (!updatedFacility) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FACILITY_NOT_FOUND',
-            message: `Healthcare facility with ID '${providerId}' does not exist.`,
-          },
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: updatedFacility,
-      meta: {
-        message: `Facility verification status successfully updated to ${body.status} with permanent audit log entry.`,
-        verifiedAt: updatedFacility.lastVerifiedAt,
-      },
-    });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown internal error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'VERIFICATION_UPDATE_FAILED',
-          message: 'Failed to record verification decision.',
-          details: process.env.NODE_ENV === 'development' ? message : undefined,
-        },
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, data: facility });
+  } catch (error) {
+    if (error instanceof AccessError) return NextResponse.json({ success: false, error: { code: error.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', message: error.message } }, { status: error.status });
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+    if (code === 'P2025') return NextResponse.json({ success: false, error: { code: 'FACILITY_NOT_FOUND', message: 'Facility was not found.' } }, { status: 404 });
+    console.error('[providers/:id/verification] Verification update failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'VERIFICATION_UNAVAILABLE', message: 'The verification record could not be saved.' } }, { status: 503 });
   }
 }

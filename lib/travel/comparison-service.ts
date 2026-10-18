@@ -7,7 +7,7 @@ import {
   DestinationComparisonOption,
   PatientTravelContext,
   RecommendationCategory,
-  TravelComparisonRequest,
+  TravelComparisonServiceRequest,
   TravelComparisonResult,
 } from './types';
 import {
@@ -21,9 +21,11 @@ import {
  * Executes a safety-first travel comparison for post-surgical follow-up.
  */
 export async function executeTravelComparison(
-  req: TravelComparisonRequest
+  req: TravelComparisonServiceRequest
 ): Promise<TravelComparisonResult> {
   const startTime = Date.now();
+  const effectiveOrigin = req.origin || { latitude: 26.9124, longitude: 75.7873, label: 'Jaipur, Rajasthan' };
+  req.origin = effectiveOrigin;
   const comparisonId = `tc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const createdAt = new Date().toISOString();
 
@@ -183,7 +185,7 @@ export async function executeTravelComparison(
 
   // 4. Resolve Candidate Providers (Contract with Member 3)
   // Retrieve original hospital plus candidate local providers within radius or district
-  const resolvedDistrict = req.origin.district || patient.origin.district;
+  const resolvedDistrict = req.origin?.district || patient?.origin?.district || '';
   const candidateProviders: CandidateProvider[] = SEEDED_PROVIDERS.filter((p) => {
     if (req.customCandidateIds && req.customCandidateIds.length > 0) {
       return req.customCandidateIds.includes(p.providerId);

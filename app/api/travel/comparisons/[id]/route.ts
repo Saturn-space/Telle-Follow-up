@@ -1,50 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SAVED_COMPARISONS } from '@/lib/travel/data-store';
+import { prisma } from '@/lib/prisma';
+import { getVerifiedAuthContext } from '@/lib/server/auth-guard';
+import { AccessError, requirePatientAccess } from '@/lib/server/db-access';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await getVerifiedAuthContext(request);
     const { id } = await params;
-    const comparison = SAVED_COMPARISONS.get(id);
-
-    if (!comparison) {
-      return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          error: {
-            code: 'NOT_FOUND',
-            message: `Travel comparison with ID '${id}' not found.`,
-          },
-          meta: { timestamp: new Date().toISOString() },
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: comparison,
-        error: null,
-        meta: { timestamp: new Date().toISOString() },
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        data: null,
-        error: {
-          code: 'SERVER_ERROR',
-          message: error?.message || 'Failed to retrieve travel comparison.',
-        },
-        meta: { timestamp: new Date().toISOString() },
-      },
-      { status: 500 }
-    );
+    const comparison = await prisma.travelComparison.findUnique({ where: { id }, include: { patient: { select: { fullName: true, surgeries: { orderBy: { surgeryDate: 'desc' }, take: 1, select: { procedureName: true } } } }, riskAssessment: { include: { clinicalAlerts: { select: { severity: true, headline: true } } } } } });
+    if (!comparison) throw new AccessError('Travel comparison was not found.', 404);
+    await requirePatientAccess(auth, comparison.patientId);
+    const snapshot = comparison.candidateOptionsJson && !Array.isArray(comparison.candidateOptionsJson) && typeof comparison.candidateOptionsJson === 'object'
+      ? comparison.candidateOptionsJson as Record<string, unknown>
+      : {};
+    const data = { ...snapshot, comparisonId: comparison.id };
+    return NextResponse.json({ success: true, data, error: null, meta: { timestamp: new Date().toISOString() } });
+  } catch (error) {
+    if (error instanceof AccessError) return NextResponse.json({ success: false, error: { code: error.status === 401 ? 'UNAUTHORIZED' : error.status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: error.message } }, { status: error.status });
+    console.error('[travel/comparison] Read failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'COMPARISON_UNAVAILABLE', message: 'Travel comparison could not be loaded.' } }, { status: 503 });
   }
 }

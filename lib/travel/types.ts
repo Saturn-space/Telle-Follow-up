@@ -265,12 +265,16 @@ export const GeoLocationSchema = z.object({
 
 export const TravelComparisonRequestSchema = z.object({
   patientId: z.string().min(1, 'Patient ID is required'),
-  origin: GeoLocationSchema,
   requiredService: z.string().min(1, 'Required service code is required'),
   transportMode: z.enum(['DRIVING', 'PUBLIC_TRANSIT', 'TAXI']).default('DRIVING'),
-  customCandidateIds: z.array(z.string()).optional(),
-  simulateClinicalUrgency: z.enum(['LOW', 'MODERATE', 'HIGH', 'CRITICAL', 'UNASSESSED_OR_MISSING']).optional(),
-});
+}).strict();
+
+/** Inputs used only by the legacy fixture-based travel unit service. */
+export type TravelComparisonServiceRequest = z.infer<typeof TravelComparisonRequestSchema> & {
+  origin: GeoLocation;
+  customCandidateIds?: string[];
+  simulateClinicalUrgency?: ClinicalUrgencyLevel;
+};
 
 export type TravelComparisonRequest = z.infer<typeof TravelComparisonRequestSchema>;
 

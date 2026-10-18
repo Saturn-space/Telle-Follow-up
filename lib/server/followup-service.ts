@@ -7,6 +7,7 @@ import {
   PaymentOrder,
   AppointmentStatus,
   AppointmentType,
+  SERVICE_PRICING_INR,
 } from '@/lib/types/followup';
 import { store } from '@/lib/server/store';
 
@@ -376,18 +377,65 @@ export class FollowUpService {
   }
 
   /**
-   * Create an optional Razorpay payment order.
-   * Disabled by default via PAYMENTS_ENABLED environment variable.
+   * Create a functional Razorpay payment order (INR only).
+   * Validates service pricing server-side in paise.
    */
   static createPaymentOrder(params: {
+    userId?: string;
     planId: string;
     appointmentId?: string;
-    amount: number; // in paise
+    serviceType?: string;
+    amount?: number; // in paise
+    currency?: string;
   }): { order?: PaymentOrder; error?: string; isEnabled: boolean } {
     const isEnabled = process.env.PAYMENTS_ENABLED === 'true';
 
-    if (params.amount <= 0 || !Number.isInteger(params.amount)) {
-      return { isEnabled, error: 'Invalid order amount: must be positive integer in currency minor unit (paise).' };
+    // Strict INR-only currency enforcement
+    if (params.currency && params.currency !== 'INR') {
+      return {
+        isEnabled,
+        error: `Unsupported currency '${params.currency}'. Only INR (₹) transactions are supported by Tele-Follow-Up Orchestrator.`,
+      };
+    }
+
+    // Resolve service type and authoritative server-calculated amount
+    const serviceKey = params.serviceType || 'TELECONSULTATION';
+    const catalogItem = SERVICE_PRICING_INR[serviceKey];
+    let expectedAmountPaise: number;
+
+    if (params.serviceType && catalogItem) {
+      // If serviceType is specified, enforce catalog pricing against tampering
+      if (params.amount !== undefined && params.amount !== catalogItem.paise) {
+        return {
+          isEnabled,
+          error: `Tampered amount rejected: expected ₹${catalogItem.rupees} (${catalogItem.paise} paise) for ${catalogItem.description}, got ${params.amount} paise.`,
+        };
+      }
+      expectedAmountPaise = catalogItem.paise;
+    } else if (params.amount !== undefined) {
+      // Custom amount provided without specific catalog service key
+      if (params.amount <= 0 || !Number.isInteger(params.amount)) {
+        return { isEnabled, error: 'Invalid order amount: must be positive integer in currency minor unit (paise).' };
+      }
+      expectedAmountPaise = params.amount;
+    } else {
+      expectedAmountPaise = catalogItem ? catalogItem.paise : 50000;
+    }
+
+    // Prevent duplicate charges if appointment is already confirmed/paid
+    if (params.appointmentId) {
+      const existingAppt = store.getAppointment(params.appointmentId);
+      if (existingAppt && existingAppt.status === 'CONFIRMED') {
+        const existingPaid = Array.from(store.getAllPaymentOrders()).find(
+          (p) => p.appointmentId === params.appointmentId && p.status === 'CAPTURED'
+        );
+        if (existingPaid) {
+          return {
+            isEnabled,
+            error: `Appointment '${params.appointmentId}' has already been paid and confirmed (Payment ID: ${existingPaid.razorpayPaymentId}).`,
+          };
+        }
+      }
     }
 
     const orderId = `order_${crypto.randomBytes(8).toString('hex')}`;
@@ -396,13 +444,16 @@ export class FollowUpService {
 
     const paymentOrder: PaymentOrder = {
       id: `pay-${crypto.randomUUID().slice(0, 8)}`,
+      userId: params.userId,
       planId: params.planId,
       appointmentId: params.appointmentId,
-      amount: params.amount,
+      serviceType: serviceKey,
+      amount: expectedAmountPaise,
       currency: 'INR',
       receipt,
-      status: isEnabled ? 'PENDING' : 'NOT_REQUIRED',
+      status: 'PENDING',
       razorpayOrderId: orderId,
+      signatureVerified: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -412,9 +463,7 @@ export class FollowUpService {
     return {
       order: paymentOrder,
       isEnabled,
-      error: isEnabled
-        ? undefined
-        : 'Payment integration is currently disabled (PAYMENTS_ENABLED=false). Clinical care is never blocked by payment status.',
+      error: undefined,
     };
   }
 
@@ -426,9 +475,12 @@ export class FollowUpService {
     razorpayOrderId: string;
     razorpayPaymentId: string;
     razorpaySignature: string;
-  }): { success: boolean; error?: string; alreadyCaptured?: boolean } {
+  }): { success: boolean; error?: string; alreadyCaptured?: boolean; order?: PaymentOrder } {
     const isEnabled = process.env.PAYMENTS_ENABLED === 'true';
-    const secret = process.env.RAZORPAY_KEY_SECRET || 'placeholder_secret';
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!isEnabled || !secret) {
+      return { success: false, error: 'Payment verification is disabled or not configured.' };
+    }
 
     if (!params.razorpaySignature || typeof params.razorpaySignature !== 'string') {
       return { success: false, error: 'Payment signature missing or invalid format.' };
@@ -436,12 +488,12 @@ export class FollowUpService {
 
     const order = store.getPaymentOrderByRazorpayId(params.razorpayOrderId);
     if (!order) {
-      return { success: false, error: 'Payment order record not found.' };
+      return { success: false, error: 'Payment order record not found for specified Razorpay order ID.' };
     }
 
     // If order already captured, return idempotent success
     if (order.status === 'CAPTURED') {
-      return { success: true, alreadyCaptured: true };
+      return { success: true, alreadyCaptured: true, order };
     }
 
     // Verify HMAC-SHA256 signature
@@ -462,27 +514,34 @@ export class FollowUpService {
       isValid = false;
     }
 
-    // Sandbox test key fallback for offline automated testing when payments are disabled
-    if (!isValid && !isEnabled && params.razorpaySignature === 'test_valid_signature') {
-      isValid = true;
-    }
+    const now = new Date().toISOString();
 
     if (!isValid) {
       order.status = 'FAILED';
+      order.signatureVerified = false;
       order.failureReason = 'Cryptographic signature mismatch on backend verification.';
-      order.updatedAt = new Date().toISOString();
+      order.updatedAt = now;
       store.savePaymentOrder(order);
-      return { success: false, error: 'Invalid payment signature. Verification failed.' };
+      return { success: false, error: 'Invalid payment signature. Cryptographic verification failed.', order };
     }
 
     order.status = 'CAPTURED';
+    order.signatureVerified = true;
+    order.verifiedAt = now;
     order.razorpayPaymentId = params.razorpayPaymentId;
     order.razorpaySignature = params.razorpaySignature;
     order.failureReason = undefined;
-    order.updatedAt = new Date().toISOString();
+    order.updatedAt = now;
     store.savePaymentOrder(order);
 
-    return { success: true };
+    return { success: true, order };
+  }
+
+  /**
+   * Get payments authorized for a specific user with ownership check.
+   */
+  static getUserPayments(userId: string): PaymentOrder[] {
+    return store.getPaymentOrdersByUser(userId);
   }
 
   /**

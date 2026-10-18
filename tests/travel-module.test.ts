@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import {
   calculateHaversineDistanceKm,
   calculateRoute,
@@ -120,7 +121,7 @@ async function runAllTests() {
     'Long-distance travel (>250 km) adds post-op lodging/subsistence allowance'
   );
   assert(
-    longDistanceCostOutcome.estimate?.assumptions.some((a) => a.includes('Round-trip multiplier')),
+    Boolean(longDistanceCostOutcome.estimate?.assumptions.some((a) => a.includes('Round-trip multiplier'))),
     'Cost estimate includes transparent round-trip assumption'
   );
 
@@ -212,13 +213,16 @@ async function runAllTests() {
 
   const validApiPayload = {
     patientId: 'pt-101',
-    origin: { latitude: 26.9, longitude: 75.8, label: 'Jaipur' },
     requiredService: 'POST_OP_WOUND_CARE',
     transportMode: 'DRIVING',
   };
   assert(
     TravelComparisonRequestSchema.safeParse(validApiPayload).success,
     'POST /api/travel/compare schema accepts valid request'
+  );
+  assert(
+    !TravelComparisonRequestSchema.safeParse({ ...validApiPayload, simulateClinicalUrgency: 'LOW', origin: { latitude: 26.9, longitude: 75.8, label: 'Jaipur' } }).success,
+    'POST /api/travel/compare rejects client-supplied risk and origin overrides'
   );
 
   const missingPatientIdPayload = {
@@ -330,7 +334,7 @@ async function runAllTests() {
   });
   assert(
     negativeRateOutcome.estimate === null &&
-      negativeRateOutcome.missingReason?.includes('positive number greater than zero'),
+      Boolean(negativeRateOutcome.missingReason?.includes('positive number greater than zero')),
     'Negative custom rate per km rejected with explicit reason'
   );
 
@@ -341,7 +345,7 @@ async function runAllTests() {
   });
   assert(
     negativeDistOutcome.estimate === null &&
-      negativeDistOutcome.missingReason?.includes('greater than zero'),
+      Boolean(negativeDistOutcome.missingReason?.includes('greater than zero')),
     'Negative distance rejected with explicit reason'
   );
 
@@ -509,11 +513,15 @@ async function runAllTests() {
   console.log('======================================================\n');
 
   if (passedCount !== totalCount) {
-    process.exit(1);
+    throw new Error(`${totalCount - passedCount} travel module test(s) failed`);
   }
 }
 
-runAllTests().catch((err) => {
-  console.error('Fatal test execution error:', err);
-  process.exit(1);
+describe('Member 4: Travel Optimization & Escalation Suite', () => {
+  it('runs all travel module coordinate, routing, distance, cost, and concurrency checks', async () => {
+    await runAllTests();
+    const passedCount = results.filter((r) => r.passed).length;
+    expect(passedCount).toBe(results.length);
+    expect(passedCount).toBeGreaterThan(0);
+  }, 30000);
 });

@@ -16,15 +16,15 @@ export default function ClinicalEscalationBanner({
   emergencyActionRequired,
 }: ClinicalEscalationBannerProps) {
   return (
-    <div className="rounded-xl border-2 border-red-500 bg-red-50 p-5 sm:p-6 shadow-md text-red-950 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+    <div className="rounded-2xl border-2 border-[#BA1A1A] bg-[#FEECEB] p-6 sm:p-7 shadow-lg text-[#93000A] mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
       <div className="flex flex-col sm:flex-row items-start gap-4">
-        <div className="p-3 bg-red-600 text-white rounded-xl shadow-sm shrink-0">
+        <div className="p-3 bg-[#BA1A1A] text-white rounded-2xl shadow-sm shrink-0">
           <ShieldAlert className="w-8 h-8 animate-pulse" />
         </div>
 
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2 mb-1.5">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-red-600 text-white">
+            <span className="px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-[#BA1A1A] text-white">
               Emergency Escalation Active
             </span>
             <span className="text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded">
@@ -51,7 +51,7 @@ export default function ClinicalEscalationBanner({
             <div className="bg-white/80 border border-red-200 rounded-lg p-3.5 mb-4">
               <div className="flex items-center gap-1.5 text-xs font-bold text-red-900 uppercase tracking-wider mb-2">
                 <AlertTriangle className="w-4 h-4 text-red-600" />
-                Detected Post-Surgical Red Flags (Member 2 AI Risk Ingestion)
+                Detected Post-Surgical Red Flags (Clinical Risk Stratification)
               </div>
               <ul className="list-disc list-inside space-y-1 text-xs text-red-900 font-medium">
                 {clinicalRisk.redFlags.map((flag, idx) => (

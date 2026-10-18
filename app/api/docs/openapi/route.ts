@@ -11,8 +11,7 @@ export async function GET() {
     info: {
       title: 'Tele-Follow-Up Orchestrator - Local Healthcare Provider Directory API',
       version: '1.0.0',
-      description:
-        'REST API for searching, discovering, and verifying accredited local post-surgical healthcare facilities, clinics, and diagnostic labs. Owned by Member 3.',
+        description: 'REST API for searching, discovering, and reviewing local healthcare facilities.',
       contact: {
         name: 'Member 3 - Tele-Follow-Up Architecture Team',
         url: 'https://github.com/Saturn-space/Telle-Follow-up',
@@ -42,7 +41,7 @@ export async function GET() {
             { name: 'radiusKm', in: 'query', schema: { type: 'number', default: 50 }, description: 'Maximum radius in kilometers' },
             { name: 'services', in: 'query', schema: { type: 'string' }, description: 'Comma-separated ServiceCategory enums' },
             { name: 'facilityType', in: 'query', schema: { type: 'string' }, description: 'Comma-separated FacilityType enums' },
-            { name: 'verificationStatus', in: 'query', schema: { type: 'string' }, description: 'Filter by status (VERIFIED, SEEDED_DEMO, etc.)' },
+            { name: 'verificationStatus', in: 'query', schema: { type: 'string' }, description: 'Filter by verification status. Verified is the default.' },
             { name: 'emergencyOnly', in: 'query', schema: { type: 'boolean' }, description: 'Filter facilities with 24/7 ER' },
             { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
@@ -55,7 +54,7 @@ export async function GET() {
         post: {
           tags: ['Providers'],
           summary: 'Register a new healthcare facility',
-          description: 'Requires COORDINATOR or ADMIN role via x-user-role header',
+          description: 'Requires a signed-in coordinator or administrator session.',
           requestBody: {
             required: true,
             content: {
@@ -135,7 +134,7 @@ export async function GET() {
                   type: 'object',
                   required: ['status', 'evidenceNotes'],
                   properties: {
-                    status: { type: 'string', enum: ['VERIFIED', 'UNVERIFIED', 'PENDING_REVIEW', 'SEEDED_DEMO'] },
+                    status: { type: 'string', enum: ['VERIFIED', 'UNVERIFIED'] },
                     evidenceNotes: { type: 'string', minLength: 5 },
                     registryLicenseNo: { type: 'string' },
                     verifierUserId: { type: 'string' },

@@ -8,11 +8,17 @@ export async function GET() {
       version: '1.0.0',
       description: 'REST API contracts for post-surgical risk stratification, deterministic physiological safety checks, AI explanations, and clinician review workflows.',
     },
+    components: {
+      securitySchemes: {
+        sessionCookie: { type: 'apiKey', in: 'cookie', name: 'teleflow_session' },
+      },
+    },
     paths: {
       '/api/risk-assessments/evaluate': {
         post: {
-          summary: 'Trigger AI-assisted post-surgical risk evaluation',
-          description: 'Consumes validated recovery observations from Member 1, computes deterministic physiological score and red flags, calls Claude for structured explanation if configured, and records auditable assessment.',
+          summary: 'Assess the latest saved recovery entry',
+          description: 'Requires a signed-in clinician, coordinator, or administrator. The patientId selects a persisted recovery record; request-supplied vitals are not accepted.',
+          security: [{ sessionCookie: [] }],
           requestBody: {
             required: true,
             content: {
@@ -20,12 +26,7 @@ export async function GET() {
                 schema: {
                   type: 'object',
                   properties: {
-                    patientId: { type: 'string', example: 'pat_chole_01' },
-                    enableAiExplanation: { type: 'boolean', default: true },
-                    recoveryInput: {
-                      type: 'object',
-                      description: 'Full recovery log input matching PatientRecoveryInput',
-                    },
+                    patientId: { type: 'string' },
                   },
                 },
               },
@@ -42,6 +43,7 @@ export async function GET() {
         get: {
           summary: 'Get assessment by ID',
           parameters: [{ name: 'assessmentId', in: 'path', required: true, schema: { type: 'string' } }],
+          security: [{ sessionCookie: [] }],
           responses: {
             200: { description: 'Assessment details returned' },
             404: { description: 'Assessment not found' },
@@ -51,7 +53,8 @@ export async function GET() {
       '/api/risk-assessments/{assessmentId}/review': {
         post: {
           summary: 'Submit clinician review or override',
-          description: 'Authorized clinician signs off, overrides risk score, or triggers formal escalation to operating surgeon.',
+          description: 'A clinician records a review. Reviewer identity is derived from the signed-in account.',
+          security: [{ sessionCookie: [] }],
           parameters: [{ name: 'assessmentId', in: 'path', required: true, schema: { type: 'string' } }],
           requestBody: {
             required: true,
@@ -59,11 +62,9 @@ export async function GET() {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['decision', 'reviewerName', 'reviewerRole'],
+                  required: ['decision', 'clinicalNotes'],
                   properties: {
                     decision: { type: 'string', enum: ['ACCEPTED', 'OVERRIDDEN', 'REJECTED'] },
-                    reviewerName: { type: 'string', example: 'Dr. Priya Sundaram' },
-                    reviewerRole: { type: 'string', enum: ['SURGEON', 'LOCAL_DOCTOR', 'COORDINATOR'] },
                     overrideLevel: { type: 'string', enum: ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'] },
                     clinicalNotes: { type: 'string' },
                     escalateToOperatingSurgeon: { type: 'boolean' },
@@ -83,6 +84,7 @@ export async function GET() {
         get: {
           summary: 'List assessment history for patient',
           parameters: [{ name: 'patientId', in: 'path', required: true, schema: { type: 'string' } }],
+          security: [{ sessionCookie: [] }],
           responses: {
             200: { description: 'List of historical assessments returned' },
           },

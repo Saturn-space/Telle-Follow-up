@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Tele-Follow-Up Orchestrator API",
-    "description": "REST API contracts for Post-Surgical Follow-Up Coordination, Jitsi Video Sessions, and Integration.",
+    "description": "REST contracts for post-surgical follow-up. Authenticated endpoints use the signed HTTP-only teleflow_session cookie or a JWT bearer token; client-supplied role and identity headers are ignored.",
     "version": "1.0.0"
   },
   "servers": [
@@ -13,17 +13,17 @@
   ],
   "components": {
     "securitySchemes": {
-      "UserRoleHeader": {
+      "SessionCookie": {
         "type": "apiKey",
-        "in": "header",
-        "name": "x-user-role",
-        "description": "User Role (PATIENT, CLINICIAN, COORDINATOR, ADMIN)"
+        "in": "cookie",
+        "name": "teleflow_session",
+        "description": "Signed HTTP-only session cookie. The server reloads the account role from PostgreSQL."
       },
-      "UserIdHeader": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "x-user-id",
-        "description": "User or Patient Identifier"
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Signed session token. The server reloads the account role from PostgreSQL."
       }
     },
     "schemas": {

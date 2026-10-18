@@ -1,7 +1,11 @@
 node_modules/
 .next/
+.next-audit-build/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
+.private-data/
+storage/
+/generated/prisma/

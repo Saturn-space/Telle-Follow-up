@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import {
   HealthcareFacilityItem,
-  VerificationStatus,
 } from '@/lib/types/provider';
 
 interface VerificationModalProps {
@@ -23,7 +22,7 @@ export default function VerificationModal({
   onClose,
   onSuccess,
 }: VerificationModalProps) {
-  const [status, setStatus] = useState<VerificationStatus>('VERIFIED');
+  const [status, setStatus] = useState<'VERIFIED' | 'UNVERIFIED'>('VERIFIED');
   const [registryLicenseNo, setRegistryLicenseNo] = useState('');
   const [evidenceNotes, setEvidenceNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,13 +45,11 @@ export default function VerificationModal({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': 'ADMIN',
         },
         body: JSON.stringify({
           status,
           evidenceNotes: evidenceNotes.trim(),
           registryLicenseNo: registryLicenseNo.trim() || undefined,
-          verifierUserId: 'coord_dr_sharma_admin',
         }),
       });
 
@@ -116,13 +113,11 @@ export default function VerificationModal({
             </label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as VerificationStatus)}
+              onChange={(e) => setStatus(e.target.value as 'VERIFIED' | 'UNVERIFIED')}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             >
               <option value="VERIFIED">VERIFIED — Formally Checked & Approved</option>
-              <option value="PENDING_REVIEW">PENDING_REVIEW — Under Audit</option>
               <option value="UNVERIFIED">UNVERIFIED — Incomplete or Unconfirmed</option>
-              <option value="SEEDED_DEMO">SEEDED_DEMO — Demonstration Test Record</option>
             </select>
           </div>
 

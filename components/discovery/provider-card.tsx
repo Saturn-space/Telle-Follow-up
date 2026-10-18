@@ -61,10 +61,10 @@ export default function ProviderCard({
   return (
     <div
       onClick={() => onSelect(facility)}
-      className={`bg-white rounded-xl border p-5 transition-all cursor-pointer shadow-sm hover:shadow-md ${
+      className={`bg-white rounded-2xl border p-5 transition-all cursor-pointer shadow-xs hover:shadow-md ${
         isSelected
-          ? 'border-teal-600 ring-2 ring-teal-500/20 bg-teal-50/20'
-          : 'border-slate-200 hover:border-slate-300'
+          ? 'border-[#1745D8] ring-2 ring-[#1745D8]/20 bg-[#F0F3FF]/50'
+          : 'border-[#DCE5F5] hover:border-[#1745D8]'
       }`}
     >
       {/* Header Badges */}
@@ -120,6 +120,7 @@ export default function ProviderCard({
       <h4 className="text-base font-bold text-slate-900 group-hover:text-teal-700 transition-colors">
         {facility.name}
       </h4>
+      {isDemo && <p className="mt-1 text-[11px] font-medium text-amber-800">Synthetic sample only — not a real care provider.</p>}
 
       <div className="mt-1.5 flex items-start gap-1.5 text-xs text-slate-600">
         <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
@@ -202,22 +203,22 @@ export default function ProviderCard({
             View Full Profile
           </button>
 
-          {onForwardToTravel && (
+          {onForwardToTravel && isVerified && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onForwardToTravel(facility);
               }}
-              title="Forward coordinates to Member 4 Travel Optimizer"
+              title="Forward coordinates to Travel Optimizer"
               className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors flex items-center gap-1"
             >
               <Compass className="w-3 h-3 text-amber-600" />
-              Send to M4 Travel
+              Send to Travel
             </button>
           )}
 
-          {onVerify && !isVerified && (
+          {onVerify && !isVerified && !isDemo && (
             <button
               type="button"
               onClick={(e) => {
@@ -235,12 +236,15 @@ export default function ProviderCard({
         <button
           type="button"
           onClick={(e) => {
+            if (!isVerified) return;
             e.stopPropagation();
             onRequestReferral(facility);
           }}
-          className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm"
+          disabled={!isVerified}
+          title={isVerified ? 'Coordinate care with this verified facility.' : 'Only administrator-verified facilities can receive referrals.'}
+          className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
         >
-          Coordinate Care
+          {isVerified ? 'Coordinate Care' : 'Verification required'}
         </button>
       </div>
     </div>

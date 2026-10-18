@@ -1,113 +1,37 @@
-// ============================================================================
-// API ROUTE: /api/providers/nearby
-// GET: Spatial radius proximity search around coordinates
-// ============================================================================
-
 import { NextRequest, NextResponse } from 'next/server';
-import { providerRepository } from '@/lib/db/provider-repository';
-import { ServiceCategory } from '@/lib/types/provider';
+import { ServiceCategory } from '@/generated/prisma';
+import { prisma } from '@/lib/prisma';
+import { getVerifiedAuthContext } from '@/lib/server/auth-guard';
+import { calculateHaversineDistanceKm } from '@/lib/travel/routing-adapter';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-
-    const latParam = searchParams.get('lat') || searchParams.get('latitude');
-    const lngParam = searchParams.get('lng') || searchParams.get('longitude');
-    const radiusParam = searchParams.get('radiusKm') || searchParams.get('radius') || '25';
-    const servicesParam = searchParams.get('services');
-    const limitParam = searchParams.get('limit') || '10';
-
-    if (!latParam || !lngParam) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'MISSING_COORDINATES',
-            message: 'Both latitude (lat) and longitude (lng) parameters are required for nearby search.',
-          },
-        },
-        { status: 400 }
-      );
+    const auth = await getVerifiedAuthContext(request);
+    if (!auth.isAuthorized) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: auth.error || 'A valid session is required.' } }, { status: 401 });
+    const params = new URL(request.url).searchParams;
+    const lat = Number(params.get('lat') || params.get('latitude'));
+    const lng = Number(params.get('lng') || params.get('longitude'));
+    const radius = Number(params.get('radiusKm') || params.get('radius') || 25);
+    const limit = Math.min(50, Math.max(1, Number(params.get('limit') || 10)));
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+      return NextResponse.json({ success: false, error: { code: 'INVALID_COORDINATES', message: 'Valid latitude and longitude are required.' } }, { status: 400 });
     }
-
-    const latitude = parseFloat(latParam);
-    const longitude = parseFloat(lngParam);
-    const radiusKm = parseFloat(radiusParam);
-    const limit = Math.min(50, Math.max(1, parseInt(limitParam, 10)));
-
-    if (isNaN(latitude) || latitude < -90 || latitude > 90) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_LATITUDE',
-            message: 'Latitude must be a valid number between -90 and 90.',
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    if (isNaN(longitude) || longitude < -180 || longitude > 180) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_LONGITUDE',
-            message: 'Longitude must be a valid number between -180 and 180.',
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    if (isNaN(radiusKm) || radiusKm <= 0 || radiusKm > 500) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_RADIUS',
-            message: 'radiusKm must be a positive number between 1 and 500 km.',
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    const services = servicesParam
-      ? (servicesParam.split(',').map((s) => s.trim().toUpperCase()) as ServiceCategory[])
-      : undefined;
-
-    const result = providerRepository.searchFacilities({
-      latitude,
-      longitude,
-      radiusKm,
-      services,
-      limit,
-      sortBy: 'distance',
+    if (!Number.isFinite(radius) || radius <= 0 || radius > 500) return NextResponse.json({ success: false, error: { code: 'INVALID_RADIUS', message: 'Radius must be between 1 and 500 km.' } }, { status: 400 });
+    const rawServices = (params.get('services') || '').split(',').filter(Boolean).map((value) => value.trim().toUpperCase());
+    const services = rawServices.filter((value): value is ServiceCategory => Object.values(ServiceCategory).includes(value as ServiceCategory));
+    if (rawServices.length && services.length !== rawServices.length) return NextResponse.json({ success: false, error: { code: 'INVALID_SERVICE', message: 'One or more requested service categories are invalid.' } }, { status: 400 });
+    const facilities = await prisma.healthcareFacility.findMany({
+      where: { isActive: true, verificationStatus: 'VERIFIED', latitude: { not: null }, longitude: { not: null }, services: services.length ? { some: { serviceCategory: { in: services } } } : undefined },
+      include: { services: true, verifications: { orderBy: { verifiedAt: 'desc' }, take: 1 } },
+      take: 300,
     });
-
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-      meta: {
-        ...result.meta,
-        center: { latitude, longitude },
-        radiusKm,
-      },
-    });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown internal error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'NEARBY_SEARCH_FAILED',
-          message: 'Failed to execute proximity search.',
-          details: process.env.NODE_ENV === 'development' ? message : undefined,
-        },
-      },
-      { status: 500 }
-    );
+    const data = facilities.map((facility) => ({ ...facility, distanceKm: calculateHaversineDistanceKm(lat, lng, facility.latitude!, facility.longitude!) }))
+      .filter((facility) => facility.distanceKm <= radius)
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, limit);
+    return NextResponse.json({ success: true, data, meta: { count: data.length, center: { latitude: lat, longitude: lng }, radiusKm: radius } });
+  } catch (error) {
+    console.error('[providers/nearby] Query failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'NEARBY_SEARCH_UNAVAILABLE', message: 'Nearby verified facilities could not be loaded.' } }, { status: 503 });
   }
 }

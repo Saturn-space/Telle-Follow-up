@@ -13,8 +13,6 @@ interface Props {
 
 export function ClinicianReviewDialog({ assessment, isOpen, onClose, onReviewSubmitted }: Props) {
   const [decision, setDecision] = useState<ReviewStatus>('ACCEPTED');
-  const [reviewerName, setReviewerName] = useState('Dr. Priya Sundaram');
-  const [reviewerRole, setReviewerRole] = useState<'SURGEON' | 'LOCAL_DOCTOR' | 'COORDINATOR'>('SURGEON');
   const [overrideLevel, setOverrideLevel] = useState<RiskLevel>(assessment.riskLevel);
   const [clinicalNotes, setClinicalNotes] = useState('');
   const [escalateToOperatingSurgeon, setEscalateToOperatingSurgeon] = useState(false);
@@ -34,11 +32,8 @@ export function ClinicianReviewDialog({ assessment, isOpen, onClose, onReviewSub
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           decision,
-          reviewerId: 'rev_doc_user_01',
-          reviewerName,
-          reviewerRole,
           overrideLevel: decision === 'OVERRIDDEN' ? overrideLevel : undefined,
-          clinicalNotes: clinicalNotes || 'Standard clinical sign-off verified.',
+          clinicalNotes,
           escalateToOperatingSurgeon,
         }),
       });
@@ -91,36 +86,6 @@ export function ClinicianReviewDialog({ assessment, isOpen, onClose, onReviewSub
               <span className="font-bold px-2 py-0.5 rounded text-[11px] bg-slate-200 text-slate-800">
                 {assessment.riskLevel} (Score {assessment.heuristicScore}/100)
               </span>
-            </div>
-          </div>
-
-          {/* Reviewer Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Reviewer Full Name
-              </label>
-              <input
-                type="text"
-                value={reviewerName}
-                onChange={(e) => setReviewerName(e.target.value)}
-                required
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Clinical Role
-              </label>
-              <select
-                value={reviewerRole}
-                onChange={(e) => setReviewerRole(e.target.value as any)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="SURGEON">Operating Surgeon</option>
-                <option value="LOCAL_DOCTOR">Local Accredited Doctor</option>
-                <option value="COORDINATOR">Clinical Care Coordinator</option>
-              </select>
             </div>
           </div>
 
@@ -197,7 +162,7 @@ export function ClinicianReviewDialog({ assessment, isOpen, onClose, onReviewSub
               rows={3}
               value={clinicalNotes}
               onChange={(e) => setClinicalNotes(e.target.value)}
-              placeholder="e.g. Incision erythema localized, afebrile, safe for virtual check with local wound dressing change."
+              placeholder="Enter the clinical rationale for this decision."
               required
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -217,7 +182,7 @@ export function ClinicianReviewDialog({ assessment, isOpen, onClose, onReviewSub
                 <ShieldAlert className="w-3.5 h-3.5" />
                 Raise Urgent Surgical Escalation Alert
               </span>
-              Notify operating surgeon team and disable non-urgent travel optimization.
+              Mark this assessment escalated and suspend routine travel comparison.
             </label>
           </div>
 

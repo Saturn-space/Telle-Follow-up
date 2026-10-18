@@ -63,7 +63,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
     setEndTime(e.toISOString().slice(0, 16));
     setShowScheduleModal(true);
   };
-  const [locationOrService, setLocationOrService] = useState('Encrypted Video Suite');
+  const [locationOrService, setLocationOrService] = useState('External video meeting');
   const [clinicalNotes, setClinicalNotes] = useState('');
   const [cancellationReason, setCancellationReason] = useState('');
   const [newRescheduleStart, setNewRescheduleStart] = useState('');
@@ -173,12 +173,12 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-[#DCE5F5] shadow-xs">
         <div>
-          <h3 className="text-base font-bold text-slate-900">
+          <h3 className="text-base font-bold text-[#0E1C30]">
             Appointments & Follow-Up Tasks
           </h3>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[#536078]">
             Coordinated care tasks for {patient.name} • {filteredAppointments.length} total visits
           </p>
         </div>
@@ -187,7 +187,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
           <button
             type="button"
             onClick={openScheduleModal}
-            className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-medium px-4 py-2 rounded-lg text-xs sm:text-sm shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 bg-[#1745D8] hover:bg-[#1238B5] text-white font-semibold px-5 py-2.5 rounded-xl text-xs sm:text-sm shadow-xs cursor-pointer transition-all"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Schedule Follow-Up Task</span>
@@ -404,7 +404,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                     const newType = e.target.value as typeof type;
                     setType(newType);
                     if (newType === 'TELECONSULTATION') {
-                      setLocationOrService('Encrypted Jitsi Teleconsultation Suite');
+                      setLocationOrService('External Jitsi meeting');
                     } else if (newType === 'LOCAL_CLINIC_VISIT') {
                       setLocationOrService('Local Neighborhood Outpatient Clinic');
                     } else if (newType === 'DIAGNOSTIC_LAB') {
@@ -425,7 +425,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
               {(type === 'LOCAL_CLINIC_VISIT' || type === 'DIAGNOSTIC_LAB') && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Select Local Provider (Member 3 Directory)
+                    Select Local Provider (Healthcare Directory)
                   </label>
                   <select
                     value={providerId}

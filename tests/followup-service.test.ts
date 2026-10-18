@@ -4,6 +4,11 @@ import { FollowUpService } from '../lib/server/followup-service';
 import { store } from '../lib/server/store';
 
 describe('FollowUpService Unit & Hardening Tests (Phase 3)', () => {
+  beforeEach(() => {
+    process.env.PAYMENTS_ENABLED = 'true';
+    process.env.RAZORPAY_KEY_SECRET = 'test_followup_service_secret_12345';
+  });
+
   describe('Safety Escalation & Missing Risk Invariants', () => {
     it('successfully creates a follow-up plan for a stable patient (pat-101)', () => {
       const result = FollowUpService.createPlan({
