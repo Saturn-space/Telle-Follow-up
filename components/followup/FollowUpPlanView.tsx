@@ -97,36 +97,36 @@ export const FollowUpPlanView: React.FC<FollowUpPlanViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Patient Header Summary Card */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
+      <div className="bg-white rounded-3xl p-6 border border-[#DCE5F5] shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-900">{patient.name}</h2>
-              <span className="text-xs bg-slate-100 text-slate-600 font-mono px-2 py-0.5 rounded">
+              <h2 className="text-xl font-bold text-[#0E1C30]">{patient.name}</h2>
+              <span className="text-xs bg-[#F0F3FF] text-[#536078] font-mono px-2.5 py-0.5 rounded-full border border-[#DCE5F5]">
                 {patient.mrn}
               </span>
-              <span className="text-xs bg-teal-50 text-teal-700 font-semibold px-2 py-0.5 rounded-full border border-teal-200">
+              <span className="text-xs bg-[#E6F8F2] text-[#047857] font-semibold px-2.5 py-0.5 rounded-full border border-[#A7F3D0]">
                 {patient.age}y • {patient.gender}
               </span>
             </div>
-            <p className="text-sm font-medium text-slate-700 mt-1 flex items-center gap-1.5">
-              <Hospital className="w-4 h-4 text-slate-400" />
+            <p className="text-sm font-medium text-[#0E1C30] mt-1 flex items-center gap-1.5">
+              <Hospital className="w-4 h-4 text-[#8B97B0]" />
               <span>{patient.surgeryProcedure}</span>
-              <span className="text-slate-400">•</span>
-              <span className="text-slate-500">{patient.operatingHospital}</span>
+              <span className="text-[#8B97B0]">•</span>
+              <span className="text-[#536078]">{patient.operatingHospital}</span>
             </p>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+            <p className="text-xs text-[#536078] mt-1 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-[#8B97B0]" />
               <span>Home: {patient.homeCity}, {patient.homeState}</span>
-              <span className="text-slate-400">•</span>
+              <span className="text-[#8B97B0]">•</span>
               <span>Discharged: {new Date(patient.dischargeDate).toLocaleDateString()}</span>
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             {isEscalated ? (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-xs flex items-center gap-2 max-w-sm">
-                <AlertTriangle className="w-5 h-5 shrink-0 text-red-600" />
+              <div className="bg-[#FEECEB] border border-[#FFDAD6] rounded-xl p-3 text-[#B91C1C] text-xs flex items-center gap-2 max-w-sm">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-[#B91C1C]" />
                 <span>
                   <strong>Escalated Safety Protocol:</strong> Routine travel optimization is bypassed due to high risk.
                 </span>
@@ -135,7 +135,7 @@ export const FollowUpPlanView: React.FC<FollowUpPlanViewProps> = ({
               <button
                 type="button"
                 onClick={openCreateModal}
-                className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-all shadow-xs cursor-pointer"
+                className="flex items-center gap-1.5 bg-[#1745D8] hover:bg-[#1238B5] text-white font-semibold px-5 py-2.5 rounded-xl text-xs sm:text-sm transition-all shadow-xs cursor-pointer"
               >
                 <PlusCircle className="w-4 h-4" />
                 <span>Create Follow-Up Plan</span>
@@ -147,12 +147,12 @@ export const FollowUpPlanView: React.FC<FollowUpPlanViewProps> = ({
 
       {/* Cross-Module Clinical Decision Support Context Pill */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Member 2 Risk Snapshot */}
+        {/* Risk Stratification Snapshot */}
         <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-slate-400" />
-              Member 2 • AI Risk Stratification
+              AI Risk Stratification
             </span>
             <span
               className={`text-xs font-bold px-2 py-0.5 rounded-full ${
@@ -176,12 +176,12 @@ export const FollowUpPlanView: React.FC<FollowUpPlanViewProps> = ({
           )}
         </div>
 
-        {/* Member 4 Travel Optimization Snapshot */}
+        {/* Travel Optimization Snapshot */}
         <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <MapPin className="w-4 h-4 text-slate-400" />
-              Member 4 • Travel Feasibility
+              Travel Feasibility Analysis
             </span>
             <span
               className={`text-xs font-bold px-2 py-0.5 rounded-full ${

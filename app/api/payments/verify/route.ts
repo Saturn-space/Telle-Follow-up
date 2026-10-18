@@ -35,7 +35,11 @@ export async function POST(req: NextRequest) {
 
     const response: ApiResponse = {
       success: true,
-      data: { verified: true, message: 'Payment successfully verified server-side.' },
+      data: {
+        verified: true,
+        order: result.order,
+        message: 'Payment successfully verified server-side via timing-safe HMAC-SHA256 signature check.',
+      },
       meta: { timestamp: new Date().toISOString() },
     };
     return NextResponse.json(response);

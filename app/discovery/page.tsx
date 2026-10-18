@@ -171,7 +171,7 @@ export default function HealthcareDiscoveryPage() {
     showToast(
       simulatedPatient.active
         ? 'Cleared simulated patient context.'
-        : 'Loaded Member 1 Patient Context: Anita Verma (Indiranagar, Bengaluru, Post-Cholecystectomy).'
+        : 'Loaded Patient Context: Anita Verma (Indiranagar, Bengaluru, Post-Cholecystectomy).'
     );
   };
 
@@ -203,23 +203,23 @@ export default function HealthcareDiscoveryPage() {
 
     setTravelHandoffPayload(payload);
     if (hasValidCoords) {
-      showToast(`Handoff contract generated for Member 4: ${fac.name} coordinates prepared.`);
+      showToast(`Transit routing data generated: ${fac.name} coordinates prepared.`);
     } else {
-      showToast(`Notice for Member 4: ${fac.name} has no verified coordinates. Transit routing suspended until geocoded.`);
+      showToast(`Notice: ${fac.name} has no verified coordinates. Transit routing suspended until geocoded.`);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
+    <div className="min-h-screen bg-[#F6F8FF] text-[#0E1C30] pb-16">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-[2000] bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-slate-800 text-xs animate-in slide-in-from-bottom-3 duration-200">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div className="fixed bottom-5 right-5 z-[2000] bg-[#0E1C30] text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-[#243146] text-xs animate-in slide-in-from-bottom-3 duration-200">
+          <CheckCircle2 className="w-4 h-4 text-[#89F5E7] shrink-0" />
           <span>{toastMessage}</span>
           <button
             type="button"
             onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white font-bold ml-2"
+            className="text-[#8B97B0] hover:text-white font-bold ml-2 cursor-pointer"
           >
             ✕
           </button>
@@ -227,29 +227,29 @@ export default function HealthcareDiscoveryPage() {
       )}
 
       {/* Top Navigation */}
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="border-b border-[#DCE5F5] bg-white/95 backdrop-blur-xl sticky top-0 z-40">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+              className="p-2 rounded-xl text-[#536078] hover:text-[#0E1C30] hover:bg-[#F0F3FF] transition-colors"
               title="Return to System Architecture"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div className="w-9 h-9 rounded-lg bg-teal-600 flex items-center justify-center text-white shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#1745D8] to-[#254EE0] flex items-center justify-center text-white shadow-md">
               <Hospital className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-bold text-base text-slate-900 leading-tight">
+                <h1 className="font-bold text-base text-[#0E1C30] leading-tight">
                   Healthcare Provider Discovery & Care Coordination
                 </h1>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Member 3 • Phase 4 Release Verified
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#E6F8F2] text-[#047857] border border-[#A7F3D0]">
+                  Verified Directory
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#536078]">
                 Discover accredited community facilities for safe post-surgical follow-up
               </p>
             </div>
@@ -259,9 +259,9 @@ export default function HealthcareDiscoveryPage() {
             <Link
               href="/api/docs/openapi"
               target="_blank"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl border border-[#DCE5F5] text-[#0E1C30] hover:bg-[#F0F3FF] transition-colors shadow-2xs"
             >
-              <FileCode className="w-3.5 h-3.5 text-teal-600" />
+              <FileCode className="w-4 h-4 text-[#1745D8]" />
               OpenAPI Contract
             </Link>
           </div>
@@ -278,17 +278,17 @@ export default function HealthcareDiscoveryPage() {
               Cross-Module Integration & Contract Testing
             </div>
             <span className="text-[11px] text-slate-400">
-              Simulate inputs from Member 1 (Intake) and Member 2 (AI Risk)
+              Simulate inputs from Patient Intake and AI Risk Stratification
             </span>
           </div>
 
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            {/* Member 1 Simulation */}
+            {/* Patient Intake Simulation */}
             <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 flex flex-col justify-between">
               <div>
                 <span className="font-bold text-slate-200 flex items-center gap-1.5 mb-1">
                   <Users className="w-3.5 h-3.5 text-blue-400" />
-                  M1: Patient Intake Context
+                  Patient Intake Context
                 </span>
                 <p className="text-[11px] text-slate-400">
                   {simulatedPatient.active
@@ -309,12 +309,12 @@ export default function HealthcareDiscoveryPage() {
               </button>
             </div>
 
-            {/* Member 2 Simulation */}
+            {/* AI Risk Simulation */}
             <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 flex flex-col justify-between">
               <div>
                 <span className="font-bold text-slate-200 flex items-center gap-1.5 mb-1">
                   <Stethoscope className="w-3.5 h-3.5 text-indigo-400" />
-                  M2: AI Risk Gating
+                  AI Risk Gating
                 </span>
                 <p className="text-[11px] text-slate-400">
                   {simulatedRiskTier === 'CRITICAL'
@@ -354,19 +354,19 @@ export default function HealthcareDiscoveryPage() {
               </div>
             </div>
 
-            {/* Member 4 / M5 Contract Status */}
+            {/* Travel Routing Payload */}
             <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 flex flex-col justify-between">
               <div>
                 <span className="font-bold text-slate-200 flex items-center gap-1.5 mb-1">
                   <Compass className="w-3.5 h-3.5 text-amber-400" />
-                  M4 / M5 Handoff Payload
+                  Travel Routing Payload
                 </span>
                 <p className="text-[11px] text-slate-400">
                   {travelHandoffPayload
                     ? travelHandoffPayload.hasValidCoordinates && travelHandoffPayload.coordinates
-                      ? `Ready for M4 Travel Matrix: ${travelHandoffPayload.facilityName} (${travelHandoffPayload.coordinates.latitude.toFixed(2)}, ${travelHandoffPayload.coordinates.longitude.toFixed(2)})`
-                      : `Notice for M4: ${travelHandoffPayload.facilityName} has no verified coordinates. Transit routing suspended.`
-                    : 'Click "Send to M4 Travel" on any facility card to verify payload.'}
+                      ? `Ready for Travel Matrix: ${travelHandoffPayload.facilityName} (${travelHandoffPayload.coordinates.latitude.toFixed(2)}, ${travelHandoffPayload.coordinates.longitude.toFixed(2)})`
+                      : `Notice: ${travelHandoffPayload.facilityName} has no verified coordinates. Transit routing suspended.`
+                    : 'Click "Send to Travel" on any facility card to verify payload.'}
                 </p>
               </div>
               {travelHandoffPayload && (
@@ -382,7 +382,7 @@ export default function HealthcareDiscoveryPage() {
             <div className="mt-4 p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs flex items-center gap-3">
               <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
               <div>
-                <strong className="text-white">Safety Override Triggered:</strong> Member 2 AI Risk Assessment flagged critical symptoms (fever &gt; 38.5°C or wound dehiscence). Travel cost optimization is disabled. Patient must be routed directly to the surgical hospital or nearest 24/7 emergency facility.
+                <strong className="text-white">Safety Override Triggered:</strong> AI Risk Assessment flagged critical symptoms (fever &gt; 38.5°C or wound dehiscence). Travel cost optimization is disabled. Patient must be routed directly to the surgical hospital or nearest 24/7 emergency facility.
               </div>
             </div>
           )}

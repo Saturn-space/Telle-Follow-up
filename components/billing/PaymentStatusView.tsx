@@ -1,7 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { PaymentOrder, FollowUpPlan } from '@/lib/types/followup';
+// ============================================================================
+// TELE-FOLLOW-UP ORCHESTRATOR - RAZORPAY PAYMENT GATEWAY (INR ONLY)
+// ============================================================================
+
+import React, { useState, useEffect } from 'react';
+import { PaymentOrder, FollowUpPlan, SERVICE_PRICING_INR } from '@/lib/types/followup';
 import {
   CreditCard,
   ShieldCheck,
@@ -11,267 +15,529 @@ import {
   RefreshCw,
   XCircle,
   HelpCircle,
+  Clock,
+  Receipt,
+  FileCheck,
 } from 'lucide-react';
+
+declare global {
+  interface Window {
+    Razorpay?: any;
+  }
+}
 
 interface PaymentStatusViewProps {
   plan?: FollowUpPlan;
 }
 
 export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) => {
-  const [testOrder, setTestOrder] = useState<PaymentOrder | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyStatus, setVerifyStatus] = useState<string | null>(null);
-  const [verifySuccess, setVerifySuccess] = useState<boolean | null>(null);
+  const [selectedService, setSelectedService] = useState<string>('TELECONSULTATION');
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string>('');
+  const [currentOrder, setCurrentOrder] = useState<PaymentOrder | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentStatusMessage, setPaymentStatusMessage] = useState<string | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState<boolean | null>(null);
+  const [userPayments, setUserPayments] = useState<PaymentOrder[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const isEnabled = process.env.NEXT_PUBLIC_PAYMENTS_ENABLED === 'true';
+  const serviceInfo = SERVICE_PRICING_INR[selectedService] || SERVICE_PRICING_INR.TELECONSULTATION;
 
-  const handleCreateTestOrder = async () => {
-    setIsCreating(true);
-    setVerifyStatus(null);
-    setVerifySuccess(null);
+  // Set default appointment ID if plan has appointments
+  useEffect(() => {
+    if (plan?.appointments && plan.appointments.length > 0) {
+      setSelectedAppointmentId(plan.appointments[0].id);
+    }
+  }, [plan]);
+
+  // Load payment history on mount
+  useEffect(() => {
+    loadUserPayments();
+  }, []);
+
+  const loadUserPayments = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch('/api/payments/my-payments', {
+        headers: { 'x-user-id': 'pat-101', 'x-user-role': 'PATIENT' },
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.payments) {
+        setUserPayments(json.data.payments);
+      }
+    } catch {
+      // Offline fallback
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Load Razorpay Checkout Script dynamically
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window !== 'undefined' && window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  // Step 1: Create Order
+  const handleInitiatePayment = async () => {
+    setIsProcessing(true);
+    setPaymentStatusMessage(null);
+    setPaymentSuccess(null);
 
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'pat-101',
+          'x-user-role': 'PATIENT',
+        },
         body: JSON.stringify({
           planId: plan?.id || 'plan-101',
-          amount: 50000, // ₹500 in paise
+          appointmentId: selectedAppointmentId || undefined,
+          serviceType: selectedService,
+          currency: 'INR',
         }),
       });
 
       const json = await res.json();
-      if (json.data?.order) {
-        setTestOrder(json.data.order);
+      if (!res.ok || !json.data?.order) {
+        setPaymentSuccess(false);
+        setPaymentStatusMessage(json.error?.message || 'Failed to initialize payment order on server.');
+        setIsProcessing(false);
+        return;
       }
-    } catch {
-      // Error handling
-    } finally {
-      setIsCreating(false);
+
+      const order: PaymentOrder = json.data.order;
+      const keyId = json.data.keyId || 'rzp_test_placeholder';
+      setCurrentOrder(order);
+
+      // Attempt loading Razorpay Checkout SDK
+      const scriptLoaded = await loadRazorpayScript();
+      if (scriptLoaded && window.Razorpay && keyId && !keyId.includes('placeholder')) {
+        const options = {
+          key: keyId,
+          amount: order.amount,
+          currency: 'INR',
+          name: 'Tele-Follow-Up Orchestrator',
+          description: serviceInfo.description,
+          order_id: order.razorpayOrderId,
+          prefill: {
+            name: 'Rajesh Sharma',
+            email: 'rajesh.sharma@example.in',
+            contact: '+919876543210',
+          },
+          theme: { color: '#0d9488' },
+          handler: async function (response: any) {
+            await handleVerifyPayment(order.id, response.razorpay_order_id, response.razorpay_payment_id, response.razorpay_signature);
+          },
+          modal: {
+            ondismiss: function () {
+              setPaymentSuccess(false);
+              setPaymentStatusMessage('Payment window was dismissed by the patient. Transaction cancelled.');
+              setIsProcessing(false);
+            },
+          },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (response: any) {
+          setPaymentSuccess(false);
+          setPaymentStatusMessage(`Payment failed: ${response.error?.description || 'Gateway transaction declined.'}`);
+          setIsProcessing(false);
+        });
+        rzp.open();
+      } else {
+        // Inform user that order is created in sandbox mode ready for server-side verification
+        setPaymentStatusMessage(`Order created (${order.razorpayOrderId}) for ₹${serviceInfo.rupees}. Test sandbox ready for server verification.`);
+        setIsProcessing(false);
+      }
+    } catch (err: unknown) {
+      setPaymentSuccess(false);
+      setPaymentStatusMessage(err instanceof Error ? err.message : 'Network error initiating payment.');
+      setIsProcessing(false);
     }
   };
 
-  const handleTestSignatureVerification = async (useValidSignature: boolean) => {
-    if (!testOrder) return;
-    setIsVerifying(true);
-
+  // Step 2: Verify Payment
+  const handleVerifyPayment = async (
+    orderId: string,
+    razorpayOrderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string
+  ) => {
+    setIsProcessing(true);
     try {
       const res = await fetch('/api/payments/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: testOrder.id,
-          razorpayOrderId: testOrder.razorpayOrderId,
-          razorpayPaymentId: 'pay_sandbox_test_9988',
-          razorpaySignature: useValidSignature ? 'test_valid_signature' : 'tampered_invalid_signature',
+          orderId,
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature,
         }),
       });
 
       const json = await res.json();
       if (res.ok && json.success) {
-        setVerifySuccess(true);
-        setVerifyStatus('Backend timing-safe HMAC-SHA256 signature verification SUCCEEDED. Order state transitioned to CAPTURED.');
-        setTestOrder((prev) => (prev ? { ...prev, status: 'CAPTURED' } : null));
+        setPaymentSuccess(true);
+        setPaymentStatusMessage('Payment verified successfully via timing-safe HMAC-SHA256 signature check. Appointment status transitioned to CONFIRMED.');
+        setCurrentOrder((prev) => (prev ? { ...prev, status: 'CAPTURED', razorpayPaymentId } : null));
+        await loadUserPayments();
       } else {
-        setVerifySuccess(false);
-        setVerifyStatus(json.error?.message || 'Verification rejected: signature mismatch.');
+        setPaymentSuccess(false);
+        setPaymentStatusMessage(json.error?.message || 'Payment signature verification failed.');
+        setCurrentOrder((prev) => (prev ? { ...prev, status: 'FAILED' } : null));
       }
     } catch (err: unknown) {
-      setVerifySuccess(false);
-      setVerifyStatus(err instanceof Error ? err.message : 'Network error verifying signature');
+      setPaymentSuccess(false);
+      setPaymentStatusMessage(err instanceof Error ? err.message : 'Verification network error.');
     } finally {
-      setIsVerifying(false);
+      setIsProcessing(false);
     }
+  };
+
+  // Test sandbox execution
+  const handleSimulateVerification = (useValidSignature: boolean) => {
+    if (!currentOrder) return;
+    handleVerifyPayment(
+      currentOrder.id,
+      currentOrder.razorpayOrderId,
+      'pay_sandbox_test_' + Date.now().toString().slice(-6),
+      useValidSignature ? 'test_valid_signature' : 'tampered_invalid_signature'
+    );
   };
 
   return (
     <div className="space-y-6">
-      {/* Top Integration Status Card */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
+      {/* Top Gateway Status Card */}
+      <div className="bg-white rounded-3xl p-6 border border-[#DCE5F5] shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
-              <CreditCard className="w-5 h-5" />
+            <div className="w-12 h-12 rounded-2xl bg-[#EDF3FF] text-[#1745D8] border border-[#CBD9F2] flex items-center justify-center shrink-0 shadow-2xs">
+              <CreditCard className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900">
-                  Razorpay Payment Gateway Verification
+                <h3 className="text-base font-bold text-[#0E1C30]">
+                  Razorpay Payment Gateway (INR Only)
                 </h3>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                  Optional Feature • Disabled by Default
+                <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-[#E6F8F2] text-[#047857] border border-[#A7F3D0]">
+                  Currency: ₹ INR
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Active configuration: <code className="font-mono text-slate-700">PAYMENTS_ENABLED={isEnabled ? 'true' : 'false'}</code>. Server-side signature validation active.
+              <p className="text-xs text-[#536078] mt-0.5">
+                Compliant with Indian Rupee integer paise calculations (1 INR = 100 paise). Server-side timing-safe HMAC-SHA256 validation.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-lg font-medium">
-              STATUS: DISABLED BY DEFAULT (SANDBOX READY)
+            <span className="text-xs font-mono bg-[#F0F3FF] text-[#0E1C30] border border-[#DCE5F5] px-3.5 py-1.5 rounded-xl font-medium">
+              MODE: {isEnabled ? 'LIVE GATEWAY' : 'TEST MODE (SANDBOX ACTIVE)'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Medical Safety Invariant Callout */}
-      <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 text-xs text-teal-900 space-y-1">
-        <div className="flex items-center gap-1.5 font-bold text-teal-800">
-          <ShieldCheck className="w-4 h-4 text-teal-600" />
-          <span>Core Safety Principle: Payment Never Gates Clinical Care</span>
+      {/* Safety Principle Banner */}
+      <div className="bg-[#EDF3FF] border border-[#CBD9F2] rounded-2xl p-4 text-xs text-[#0E1C30] space-y-1">
+        <div className="flex items-center gap-1.5 font-bold text-[#1745D8]">
+          <ShieldCheck className="w-4 h-4 text-[#1745D8]" />
+          <span>Clinical Safety Invariant: Care Is Never Gated by Payment</span>
         </div>
-        <p className="leading-relaxed">
-          In this post-surgical coordination system, clinical urgency, emergency escalation, and surgical follow-up care must <strong>never</strong> depend on payment status, whether a gateway is configured, or transaction success. Urgent red-flag escalations immediately bypass all billing screens.
+        <p className="leading-relaxed text-[#536078]">
+          In this post-surgical recovery coordination system, follow-up medical care and emergency clinical escalation are <strong>never blocked</strong> by payment status or gateway outages. Red-flag symptoms immediately bypass all billing screens.
         </p>
       </div>
 
-      {/* Five-State Lifecycle Discipline */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200 space-y-3">
-        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <HelpCircle className="w-4 h-4 text-teal-600" />
-          <span>Defined Payment Status State Machine</span>
-        </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <span className="font-bold text-slate-700 block text-[11px]">1. NOT_REQUIRED</span>
-            <span className="text-slate-500 text-[10px]">When payments are disabled or consultation is free.</span>
-          </div>
-          <div className="p-3 bg-amber-50/60 rounded-lg border border-amber-200">
-            <span className="font-bold text-amber-800 block text-[11px]">2. PENDING</span>
-            <span className="text-slate-500 text-[10px]">Order created on backend; awaiting client completion.</span>
-          </div>
-          <div className="p-3 bg-blue-50/60 rounded-lg border border-blue-200">
-            <span className="font-bold text-blue-800 block text-[11px]">3. AUTHORIZED</span>
-            <span className="text-slate-500 text-[10px]">Payment authorized by bank; pending capture.</span>
-          </div>
-          <div className="p-3 bg-emerald-50/60 rounded-lg border border-emerald-200">
-            <span className="font-bold text-emerald-800 block text-[11px]">4. CAPTURED</span>
-            <span className="text-slate-500 text-[10px]">HMAC signature verified server-side; confirmed.</span>
-          </div>
-          <div className="p-3 bg-red-50/60 rounded-lg border border-red-200">
-            <span className="font-bold text-red-800 block text-[11px]">5. FAILED</span>
-            <span className="text-slate-500 text-[10px]">Signature mismatch, cancelled, or rejected.</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Security Architecture Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-slate-200 space-y-3">
-          <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-            <Lock className="w-4 h-4 text-teal-600" />
-            <span>Server-Side Secret Isolation</span>
-          </div>
-          <p className="text-xs text-slate-600 leading-relaxed">
-            Only the public key ID (<code className="font-mono text-slate-700">NEXT_PUBLIC_RAZORPAY_KEY_ID</code>) is exposed to the browser. The secret key (<code className="font-mono text-slate-700">RAZORPAY_KEY_SECRET</code>) and webhook secret remain server-only secrets.
-          </p>
-          <div className="bg-slate-50 p-2.5 rounded font-mono text-[11px] text-slate-600 space-y-1">
-            <div>Key ID: rzp_test_placeholder (Public)</div>
-            <div>Key Secret: [Isolated in process.env.RAZORPAY_KEY_SECRET]</div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 border border-slate-200 space-y-3">
-          <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-            <ShieldCheck className="w-4 h-4 text-teal-600" />
-            <span>Timing-Safe Cryptographic Verification</span>
-          </div>
-          <p className="text-xs text-slate-600 leading-relaxed">
-            Never trust browser callbacks alone. The backend computes HMAC-SHA256 over <code className="font-mono">order_id|payment_id</code> and compares buffers via <code className="font-mono">crypto.timingSafeEqual</code> to prevent timing attacks.
-          </p>
-          <div className="bg-slate-50 p-2.5 rounded font-mono text-[11px] text-slate-600 space-y-1">
-            <div>Algorithm: HMAC-SHA256 with timingSafeEqual</div>
-            <div>Idempotency: Handled against duplicate captures</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Sandbox Lifecycle Verification Demo */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200 space-y-4">
-        <div>
-          <h4 className="text-sm font-bold text-slate-900">
-            Sandbox Lifecycle & Signature Verification Sandbox
+      {/* Payment Initiation & Order Summary Box */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Service & Appointment Selection */}
+        <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-slate-200 space-y-4">
+          <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-teal-600" />
+            <span>Select Post-Op Service for Payment</span>
           </h4>
-          <p className="text-xs text-slate-500 mt-1">
-            Demonstrates order generation, timing-safe cryptographic verification, and tampered signature rejection.
-          </p>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Care Service Category
+              </label>
+              <select
+                value={selectedService}
+                onChange={(e) => setSelectedService(e.target.value)}
+                disabled={isProcessing}
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500 bg-white"
+              >
+                {Object.entries(SERVICE_PRICING_INR).map(([key, val]) => (
+                  <option key={key} value={key}>
+                    {val.description} — ₹{val.rupees} (INR)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {plan?.appointments && plan.appointments.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Link to Scheduled Appointment
+                </label>
+                <select
+                  value={selectedAppointmentId}
+                  onChange={(e) => setSelectedAppointmentId(e.target.value)}
+                  disabled={isProcessing}
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500 bg-white"
+                >
+                  {plan.appointments.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.locationOrService} ({a.type.replace(/_/g, ' ')}) • Status: {a.status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Pricing Details Breakdown */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
+            <div className="flex justify-between text-slate-600">
+              <span>Service Fee:</span>
+              <span className="font-semibold text-slate-900 font-mono">₹{serviceInfo.rupees}.00</span>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span>Minor Units (Paise):</span>
+              <span className="font-mono text-slate-700">{serviceInfo.paise} paise</span>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span>GST / Healthcare Cess (0% Post-Op Exempt):</span>
+              <span className="font-mono text-slate-700">₹0.00</span>
+            </div>
+            <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-bold text-slate-900">
+              <span>Total Payable (INR):</span>
+              <span className="text-teal-700 font-mono">₹{serviceInfo.rupees}.00</span>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleInitiatePayment}
+              disabled={isProcessing}
+              className="w-full flex items-center justify-center gap-2 bg-[#1745D8] hover:bg-[#1238B5] text-white font-bold text-xs py-3 px-4 rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
+            >
+              {isProcessing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Processing Razorpay Checkout...</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>Pay ₹{serviceInfo.rupees} via Razorpay (INR)</span>
+                </>
+              )}
+            </button>
+            <p className="text-[11px] text-slate-500 text-center mt-2">
+              Protected by 256-bit SSL encryption. Razorpay test sandbox active.
+            </p>
+          </div>
         </div>
 
-        {!testOrder ? (
+        {/* Right: Active Order Status & Verification Testing */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 flex flex-col justify-between space-y-4">
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3">
+              <FileCheck className="w-4 h-4 text-teal-600" />
+              <span>Current Transaction Status</span>
+            </h4>
+
+            {currentOrder ? (
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 font-mono text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Order ID:</span>
+                    <span className="font-bold text-slate-900">{currentOrder.razorpayOrderId}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Amount:</span>
+                    <span className="font-bold text-teal-700">₹{currentOrder.amount / 100} INR</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Receipt:</span>
+                    <span className="text-slate-700">{currentOrder.receipt}</span>
+                  </div>
+                  {currentOrder.razorpayPaymentId && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Payment ID:</span>
+                      <span className="font-bold text-slate-900">{currentOrder.razorpayPaymentId}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-1 border-t border-slate-200">
+                    <span className="text-slate-500">Gateway Status:</span>
+                    <span
+                      className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                        currentOrder.status === 'CAPTURED'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : currentOrder.status === 'FAILED'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {currentOrder.status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sandbox verification buttons */}
+                {currentOrder.status === 'PENDING' && (
+                  <div className="space-y-2 pt-1">
+                    <span className="text-[11px] font-bold text-slate-700 block">
+                      Sandbox Cryptographic Verification:
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isProcessing}
+                      onClick={() => handleSimulateVerification(true)}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Verify Signature (Confirm Payment)</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessing}
+                      onClick={() => handleSimulateVerification(false)}
+                      className="w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Simulate Tampered Signature (Reject)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-6 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-500 space-y-1">
+                <Clock className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+                <p className="font-semibold text-slate-700">No active checkout order</p>
+                <p>Select a service and click Pay Now to generate a Razorpay INR order.</p>
+              </div>
+            )}
+
+            {/* Status Alert Banner */}
+            {paymentStatusMessage && (
+              <div
+                className={`mt-4 p-3 rounded-xl text-xs flex items-start gap-2.5 ${
+                  paymentSuccess
+                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-900 border border-rose-200'
+                }`}
+              >
+                {paymentSuccess ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <span className="leading-relaxed">{paymentStatusMessage}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+            <strong>Security Guarantee:</strong> Client-supplied amounts are ignored. All values are determined server-side in integer paise.
+          </div>
+        </div>
+      </div>
+
+      {/* Patient Payment History Table */}
+      <div className="bg-white rounded-xl p-5 border border-slate-200 space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-teal-600" />
+            <span>Authorized Payment History</span>
+          </h4>
           <button
             type="button"
-            onClick={handleCreateTestOrder}
-            disabled={isCreating}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white font-medium text-xs px-4 py-2 rounded-lg cursor-pointer disabled:opacity-50"
+            onClick={loadUserPayments}
+            disabled={isLoadingHistory}
+            className="text-xs text-teal-600 hover:text-teal-700 font-semibold flex items-center gap-1 cursor-pointer"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>{isCreating ? 'Creating Order...' : 'Generate Test Order (₹500 Teleconsultation Fee)'}</span>
+            <RefreshCw className={`w-3 h-3 ${isLoadingHistory ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
           </button>
+        </div>
+
+        {userPayments.length === 0 ? (
+          <p className="text-xs text-slate-500 py-3">No payments recorded for this account yet.</p>
         ) : (
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-800">
-                Order ID: <span className="font-mono">{testOrder.razorpayOrderId}</span>
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                  testOrder.status === 'CAPTURED'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : testOrder.status === 'FAILED'
-                    ? 'bg-red-100 text-red-800'
-                    : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                STATUS: {testOrder.status}
-              </span>
-            </div>
-
-            <div className="text-xs text-slate-600 space-y-0.5 font-mono text-[11px]">
-              <div>Amount: ₹{testOrder.amount / 100} ({testOrder.currency})</div>
-              <div>Receipt: {testOrder.receipt}</div>
-            </div>
-
-            {testOrder.status === 'PENDING' && (
-              <div className="pt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={isVerifying}
-                  onClick={() => handleTestSignatureVerification(true)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Test Valid Signature (Server Verification)</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isVerifying}
-                  onClick={() => handleTestSignatureVerification(false)}
-                  className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <XCircle className="w-3.5 h-3.5" />
-                  <span>Test Tampered Signature (Rejection)</span>
-                </button>
-              </div>
-            )}
-
-            {verifyStatus && (
-              <div
-                className={`p-3 rounded-lg text-xs mt-2 flex items-center gap-2 ${
-                  verifySuccess ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
-                }`}
-              >
-                {verifySuccess ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                )}
-                <span>{verifyStatus}</span>
-              </div>
-            )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="py-2.5 px-3">Date</th>
+                  <th className="py-2.5 px-3">Service</th>
+                  <th className="py-2.5 px-3">Amount</th>
+                  <th className="py-2.5 px-3">Order ID</th>
+                  <th className="py-2.5 px-3">Payment ID</th>
+                  <th className="py-2.5 px-3">Signature</th>
+                  <th className="py-2.5 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+                {userPayments.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/50">
+                    <td className="py-2.5 px-3 text-slate-700 font-sans">
+                      {new Date(p.createdAt).toLocaleDateString()} {new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-800 font-sans font-medium">
+                      {p.serviceType ? p.serviceType.replace(/_/g, ' ') : 'TELECONSULTATION'}
+                    </td>
+                    <td className="py-2.5 px-3 font-bold text-slate-900">
+                      ₹{(p.amount / 100).toFixed(2)} {p.currency}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-600 truncate max-w-[120px]">{p.razorpayOrderId}</td>
+                    <td className="py-2.5 px-3 text-slate-600 truncate max-w-[120px]">{p.razorpayPaymentId || '—'}</td>
+                    <td className="py-2.5 px-3">
+                      {p.signatureVerified ? (
+                        <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] font-sans font-bold">
+                          ✓ Verified
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-sans">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 font-sans">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          p.status === 'CAPTURED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : p.status === 'FAILED'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {p.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

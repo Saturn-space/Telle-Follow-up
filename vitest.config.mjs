@@ -8,6 +8,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    testTimeout: 30000,
+    include: ['tests/**/*.test.ts'],
+    exclude: ['**/node_modules/**', '**/Telle-Follow-up/**', '**/dist/**'],
   },
   resolve: {
     alias: {

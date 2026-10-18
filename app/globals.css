@@ -1,2 +1,125 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
+
+@layer base {
+  @import url("https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap");
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--color-surface, #f9f9ff);
+    color: var(--color-on-surface, #0e1c30);
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Zero horizontal jitter for telemetry & biometric updates */
+  .tnum {
+    font-feature-settings: "tnum" 1;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@theme {
+  --color-surface: #f9f9ff;
+  --color-surface-dim: #cddaf7;
+  --color-surface-bright: #f9f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f0f3ff;
+  --color-surface-container: #e7eeff;
+  --color-surface-container-high: #dfe8ff;
+  --color-surface-container-highest: #d6e3ff;
+  --color-on-surface: #0e1c30;
+  --color-on-surface-variant: #444655;
+  --color-inverse-surface: #243146;
+  --color-inverse-on-surface: #ecf0ff;
+  --color-outline: #747687;
+  --color-outline-variant: #c4c5d8;
+  --color-surface-tint: #254ee0;
+
+  --color-primary: #002fab;
+  --color-primary-container: #1745d8;
+  --color-primary-hover: #1238b5;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #c0caff;
+  --color-primary-fixed: #dde1ff;
+  --color-primary-fixed-dim: #b8c3ff;
+  --color-on-primary-fixed: #001355;
+  --color-on-primary-fixed-variant: #0035bd;
+
+  --color-secondary: #465aa2;
+  --color-secondary-container: #9cb0fe;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #2c4186;
+  --color-secondary-fixed: #dce1ff;
+  --color-secondary-fixed-dim: #b6c4ff;
+  --color-on-secondary-fixed: #001550;
+  --color-on-secondary-fixed-variant: #2d4288;
+
+  --color-tertiary: #004842;
+  --color-tertiary-container: #00625a;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-container: #72dfd1;
+  --color-tertiary-fixed: #89f5e7;
+  --color-tertiary-fixed-dim: #6bd8cb;
+  --color-on-tertiary-fixed: #00201d;
+  --color-on-tertiary-fixed-variant: #005049;
+
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #93000a;
+
+  --color-brand-primary: #1745d8;
+  --color-brand-primary-hover: #1238b5;
+  --color-brand-navy-dark: #122a70;
+  --color-brand-teal-recovery: #0d9488;
+
+  --color-surface-canvas: #f6f8ff;
+  --color-surface-card: #ffffff;
+  --color-surface-subtle: #edf3ff;
+  --color-surface-accent-wash: #e8efff;
+  --color-border-subtle: #dce5f5;
+  --color-border-focus: #1745d8;
+
+  --font-geist: 'Geist', sans-serif;
+  --font-headline-lg: 'Geist', sans-serif;
+  --font-headline-md: 'Geist', sans-serif;
+  --font-headline-sm: 'Geist', sans-serif;
+  --font-title-md: 'Geist', sans-serif;
+  --font-body-lg: 'Geist', sans-serif;
+  --font-body-md: 'Geist', sans-serif;
+  --font-body-sm: 'Geist', sans-serif;
+  --font-label-caps: 'Geist', sans-serif;
+  --font-numeric-data: 'Geist', sans-serif;
+}
+
+/* Material Symbols configuration */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Luminous Elevation Shadows */
+.shadow-elevation-1 {
+  box-shadow: 0 2px 6px -1px rgba(18, 42, 112, 0.04), 0 4px 16px -2px rgba(23, 69, 216, 0.03);
+}
+
+.shadow-elevation-2 {
+  box-shadow: 0 8px 24px -4px rgba(18, 42, 112, 0.08), 0 2px 8px -1px rgba(23, 69, 216, 0.04);
+}
+
+.shadow-elevation-3 {
+  box-shadow: 0 16px 36px -6px rgba(17, 26, 58, 0.12), 0 4px 12px -2px rgba(23, 69, 216, 0.06);
+}

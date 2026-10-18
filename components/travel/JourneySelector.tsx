@@ -58,7 +58,7 @@ export default function JourneySelector({
             Patient Travel Context & Journey Configuration
           </h3>
           <p className="text-xs text-slate-500">
-            Ingests patient surgical baseline from Member 1 and clinical risk state from Member 2.
+            Ingests patient surgical baseline and clinical risk evaluation state.
           </p>
         </div>
 
@@ -82,7 +82,7 @@ export default function JourneySelector({
         {/* Patient Selection */}
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1">
-            Select Patient (Member 1 Seed)
+            Select Patient Record
           </label>
           <select
             value={selectedPatientId}
@@ -147,11 +147,11 @@ export default function JourneySelector({
           </span>
         </div>
 
-        {/* Member 2 Clinical Risk Simulation */}
+        {/* Clinical Risk Simulation */}
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-            Clinical Urgency State (Member 2)
+            Clinical Urgency State
           </label>
           <select
             value={clinicalUrgencySimulation}

@@ -192,15 +192,20 @@ export interface ConsultationRecord {
 
 export interface PaymentOrder {
   id: string;
+  userId?: string;
   planId: string;
   appointmentId?: string;
+  serviceType?: string;
   amount: number; // In paise (e.g. 50000 = 500 INR)
-  currency: string;
+  currency: 'INR';
   receipt: string;
   status: PaymentStatus;
   razorpayOrderId: string;
   razorpayPaymentId?: string;
   razorpaySignature?: string;
+  signatureVerified: boolean;
+  verifiedAt?: string;
+  webhookEventId?: string;
   failureReason?: string;
   createdAt: string;
   updatedAt: string;
@@ -275,10 +280,30 @@ export const CreateConsultationRecordSchema = z.object({
   nextFollowUpDate: z.string().datetime().optional(),
 });
 
+export const SERVICE_PRICING_INR: Record<string, { paise: number; rupees: number; description: string }> = {
+  TELECONSULTATION: { paise: 50000, rupees: 500, description: 'Post-Surgical Teleconsultation Session' },
+  LOCAL_CLINIC_VISIT: { paise: 40000, rupees: 400, description: 'Local Clinic In-Person Evaluation' },
+  HOSPITAL_RETURN: { paise: 100000, rupees: 1000, description: 'Hospital Surgical Review Visit' },
+  DIAGNOSTIC_LAB: { paise: 65000, rupees: 650, description: 'Post-Op Lab Work & Diagnostics' },
+  POST_OP_WOUND_CARE: { paise: 35000, rupees: 350, description: 'Surgical Wound Dressing & Assessment' },
+  SUTURE_REMOVAL: { paise: 30000, rupees: 300, description: 'Suture & Staple Removal Service' },
+};
+
 export const CreatePaymentOrderSchema = z.object({
   planId: z.string().min(1, 'Plan ID is required'),
   appointmentId: z.string().optional(),
-  amount: z.number().positive('Amount must be positive'),
+  serviceType: z.enum([
+    'TELECONSULTATION',
+    'LOCAL_CLINIC_VISIT',
+    'HOSPITAL_RETURN',
+    'DIAGNOSTIC_LAB',
+    'POST_OP_WOUND_CARE',
+    'SUTURE_REMOVAL',
+  ]).optional(),
+  amount: z.number().int().positive('Amount must be positive integer paise').optional(),
+  currency: z.string().refine((val) => val === 'INR', {
+    message: 'Only INR currency is supported.',
+  }).default('INR'),
 });
 
 export const VerifyPaymentSchema = z.object({

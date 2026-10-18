@@ -58,11 +58,32 @@ export async function POST(req: NextRequest) {
 
     const event = body.event;
     const payload = body.payload;
+    const eventId = body.id || payload?.payment?.entity?.id || `evt_${Date.now()}`;
+    const now = new Date().toISOString();
+
+    // Check if event was already handled (idempotency)
+    const existingHandled = store.getPaymentOrderByWebhookEventId(eventId);
+    if (existingHandled) {
+      return NextResponse.json({
+        success: true,
+        data: { processed: true, event, alreadyHandled: true, orderId: existingHandled.id },
+        meta: { timestamp: now },
+      });
+    }
 
     // Handle payment events idempotently
     if (event === 'payment.captured' || event === 'order.paid') {
-      const rzpOrderId = payload?.payment?.entity?.order_id || payload?.order?.entity?.id;
-      const paymentId = payload?.payment?.entity?.id || 'pay_wh_captured';
+      const paymentEntity = payload?.payment?.entity;
+      const rzpOrderId = paymentEntity?.order_id || payload?.order?.entity?.id;
+      const paymentId = paymentEntity?.id || 'pay_wh_captured';
+
+      // Currency enforcement: Reject or skip non-INR payments
+      if (paymentEntity?.currency && paymentEntity.currency !== 'INR') {
+        return NextResponse.json(
+          { success: false, error: { code: 'INVALID_CURRENCY', message: `Currency ${paymentEntity.currency} is unsupported. Only INR is allowed.` } },
+          { status: 400 }
+        );
+      }
 
       if (rzpOrderId) {
         const order = store.getPaymentOrderByRazorpayId(rzpOrderId);
@@ -70,10 +91,23 @@ export async function POST(req: NextRequest) {
           // Idempotent check
           if (order.status !== 'CAPTURED') {
             order.status = 'CAPTURED';
+            order.signatureVerified = true;
+            order.verifiedAt = now;
             order.razorpayPaymentId = paymentId;
             order.razorpaySignature = signature;
-            order.updatedAt = new Date().toISOString();
+            order.webhookEventId = eventId;
+            order.updatedAt = now;
             store.savePaymentOrder(order);
+
+            // Update associated appointment to CONFIRMED
+            if (order.appointmentId) {
+              const appt = store.getAppointment(order.appointmentId);
+              if (appt && (appt.status === 'PROPOSED' || appt.status === 'SCHEDULED')) {
+                appt.status = 'CONFIRMED';
+                appt.updatedAt = now;
+                store.saveAppointment(appt);
+              }
+            }
           }
         }
       }
@@ -83,8 +117,10 @@ export async function POST(req: NextRequest) {
         const order = store.getPaymentOrderByRazorpayId(rzpOrderId);
         if (order && order.status !== 'CAPTURED') {
           order.status = 'FAILED';
+          order.signatureVerified = false;
+          order.webhookEventId = eventId;
           order.failureReason = payload?.payment?.entity?.error_description || 'Payment failed at gateway.';
-          order.updatedAt = new Date().toISOString();
+          order.updatedAt = now;
           store.savePaymentOrder(order);
         }
       }

@@ -275,8 +275,24 @@ class TeleFollowUpDataStore {
     return Array.from(this.paymentOrders.values()).find((p) => p.razorpayOrderId === rzpOrderId);
   }
 
+  getPaymentOrderByPaymentId(rzpPaymentId: string): PaymentOrder | undefined {
+    return Array.from(this.paymentOrders.values()).find((p) => p.razorpayPaymentId === rzpPaymentId);
+  }
+
+  getPaymentOrderByWebhookEventId(webhookEventId: string): PaymentOrder | undefined {
+    return Array.from(this.paymentOrders.values()).find((p) => p.webhookEventId === webhookEventId);
+  }
+
+  getPaymentOrdersByUser(userId: string): PaymentOrder[] {
+    return Array.from(this.paymentOrders.values())
+      .filter((p) => p.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
   getAllPaymentOrders(planId?: string): PaymentOrder[] {
-    const list = Array.from(this.paymentOrders.values());
+    const list = Array.from(this.paymentOrders.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
     return planId ? list.filter((p) => p.planId === planId) : list;
   }
 

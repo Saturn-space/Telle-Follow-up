@@ -34,9 +34,9 @@ const LeafletMapContainer = dynamic(() => import('./LeafletMapContainer'), {
   ),
 });
 
-export default function TravelOptimizationDashboard() {
+export default function TravelOptimizationDashboard({ initialPatientId }: { initialPatientId?: string } = {}) {
   const [patients, setPatients] = useState<any[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('pt-101');
+  const [selectedPatientId, setSelectedPatientId] = useState<string>(initialPatientId || 'pt-101');
   const [requiredService, setRequiredService] = useState<string>('POST_OP_WOUND_CARE');
   const [transportMode, setTransportMode] = useState<TransportMode>('DRIVING');
   const [clinicalUrgency, setClinicalUrgency] = useState<ClinicalUrgencyLevel>('LOW');
@@ -161,7 +161,7 @@ export default function TravelOptimizationDashboard() {
 
   const handleProceedToFollowUpPlan = (option: DestinationComparisonOption) => {
     setHandoffToast(
-      `Coordinating Follow-Up Plan: Destination "${option.providerName}" (${option.route.distanceKm} km) handed off to Member 5 for appointment scheduling.`
+      `Coordinating Follow-Up Plan: Destination "${option.providerName}" (${option.route.distanceKm} km) queued for care coordination and scheduling.`
     );
     setTimeout(() => setHandoffToast(null), 6000);
   };
@@ -206,7 +206,7 @@ export default function TravelOptimizationDashboard() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-teal-100 text-teal-800 border border-teal-200">
-              Member 4 • Phase 5 Maintenance & Reliability
+              Travel Options • Transit Optimization
             </span>
             <span className="text-xs text-slate-500 font-medium">
               Travel Comparison & Route Planning Module
@@ -222,9 +222,9 @@ export default function TravelOptimizationDashboard() {
 
         <div className="flex items-center gap-3 self-start md:self-auto">
           <div className="text-right hidden sm:block">
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">Current Branch</span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
             <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
-              feature/member-4-phase-5-maintenance
+              Integrated & Verified
             </span>
           </div>
         </div>
@@ -241,7 +241,7 @@ export default function TravelOptimizationDashboard() {
             </div>
           </div>
           <span className="text-[10px] text-teal-300 font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-            Phase 4 QA Verified
+            System Verified
           </span>
         </div>
 

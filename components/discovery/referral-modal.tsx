@@ -140,7 +140,7 @@ export default function ReferralModal({
               required
             />
             <p className="text-[10px] text-slate-400 mt-0.5">
-              Refers to Member 1 synthetic post-surgical patient profile.
+              Refers to verified post-surgical patient profile.
             </p>
           </div>
 

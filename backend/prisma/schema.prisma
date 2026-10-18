@@ -1,0 +1,642 @@
+// ============================================================================
+// TELE-FOLLOW-UP ORCHESTRATOR - UNIFIED PRISMA SCHEMA
+// Consolidated 5-Member Architecture with Central Auth & RBAC
+// Database: PostgreSQL
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// CENTRAL AUTHENTICATION & RBAC
+// ----------------------------------------------------------------------------
+
+enum Role {
+  PATIENT
+  CLINICIAN
+  COORDINATOR
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relational mappings across vertical slices
+  patientProfile             Patient?
+  clinicianReviews           ClinicianReview[]
+  providerVerificationAudits ProviderVerificationRecord[]
+  approvedFollowUpPlans      FollowUpPlan[]
+  notifications              Notification[]
+  paymentOrders              PaymentOrder[]
+
+  @@index([email])
+  @@index([role])
+}
+
+// ----------------------------------------------------------------------------
+// MEMBER 1: PATIENT REGISTRATION & RECOVERY TELEMETRY
+// ----------------------------------------------------------------------------
+
+model Patient {
+  id               String    @id @default(uuid())
+  userId           String?   @unique
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  mrn              String    @unique
+  fullName         String
+  dateOfBirth      DateTime?
+  age              Int?
+  gender           String
+  contactPhone     String?
+  homeCity         String?
+  homeState        String?
+  homePincode      String?
+  originalHospital String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Cross-module relations
+  surgeries        SurgeryRecord[]
+  recoveryLogs     RecoveryLog[]
+  riskAssessments  RiskAssessment[]
+  travelComparisons TravelComparison[]
+  followUpPlans    FollowUpPlan[]
+  appointments     Appointment[]
+  careReferrals    CareReferral[]
+
+  @@index([userId])
+  @@index([mrn])
+  @@index([homeCity, homeState])
+}
+
+model SurgeryRecord {
+  id               String        @id @default(uuid())
+  patientId        String
+  procedureName    String
+  operatingCenter  String?
+  operatingHospital String?
+  hospitalState    String?
+  surgeonName      String
+  surgeryDate      DateTime
+  dischargeDate    DateTime?
+  dischargeSummary String?       @db.Text
+  postOpDays       Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  patient          Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recoveryLogs     RecoveryLog[]
+
+  @@index([patientId])
+}
+
+model RecoveryLog {
+  id               String         @id @default(uuid())
+  patientId        String
+  surgeryRecordId  String?
+  postOpDay        Int
+  logTimestamp     DateTime       @default(now())
+
+  // Vitals Telemetry
+  systolicBP       Int?
+  diastolicBP      Int?
+  heartRate        Int?
+  temperatureC     Float?
+  respiratoryRate  Int?
+  oxygenSat        Float?
+
+  // Patient Reported Outcomes
+  painScore        Int            // 0-10
+  mobilityLevel    String?        // BEDREST, AMBULATING_WITH_ASSISTANCE, INDEPENDENT
+  symptoms         String[]       @default([])
+  woundDescription String?        @db.Text
+  drainOutputMl    Int?
+  isVerified       Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  patient          Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  surgeryRecord    SurgeryRecord? @relation(fields: [surgeryRecordId], references: [id], onDelete: SetNull)
+  riskAssessments  RiskAssessment[]
+
+  @@index([patientId])
+  @@index([surgeryRecordId])
+  @@index([logTimestamp])
+}
+
+// ----------------------------------------------------------------------------
+// MEMBER 2: AI RISK PREDICTION & CLINICAL DECISION SUPPORT
+// ----------------------------------------------------------------------------
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+  INDETERMINATE
+}
+
+enum ReviewStatus {
+  PENDING_REVIEW
+  ACCEPTED
+  OVERRIDDEN
+  REJECTED
+}
+
+enum AssessmentEngine {
+  DETERMINISTIC_RULES_V1
+  CLAUDE_CDS_HYBRID_V1
+  FALLBACK_HEURISTIC
+}
+
+enum FactorImpact {
+  NORMAL_BASELINE
+  MODERATE_ELEVATION
+  HIGH_RISK_FACTOR
+  CRITICAL_TRIGGER
+}
+
+model RiskAssessment {
+  id               String           @id @default(uuid())
+  patientId        String
+  recoveryLogId    String?
+  engine           AssessmentEngine @default(CLAUDE_CDS_HYBRID_V1)
+  engineVersion    String           @default("1.0.0")
+  inputDataHash    String
+  riskLevel        RiskLevel        @default(INDETERMINATE)
+  heuristicScore   Float            @default(0.0)
+  requiresInPerson Boolean          @default(false)
+
+  clinicalSummary  String           @db.Text
+  factorsJson      Json
+  missingDataJson  Json
+  limitationsJson  Json
+
+  isEscalated      Boolean          @default(false)
+  escalationReason String?          @db.Text
+
+  aiStatus         String           @default("UNCONFIGURED")
+  aiModelName      String?
+  aiResponseTimeMs Int?
+
+  reviewStatus     ReviewStatus     @default(PENDING_REVIEW)
+  reviewedById     String?
+  reviewedByName   String?
+  reviewedAt       DateTime?
+  clinicianNotes   String?          @db.Text
+  overrideLevel    RiskLevel?
+
+  patient          Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recoveryLog      RecoveryLog?     @relation(fields: [recoveryLogId], references: [id], onDelete: SetNull)
+
+  contributingFactors RiskFactor[]
+  clinicalAlerts      ClinicalAlert[]
+  reviews             ClinicianReview[]
+  followUpPlans       FollowUpPlan[]
+
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([patientId, createdAt])
+  @@index([reviewStatus])
+  @@index([isEscalated])
+  @@index([riskLevel])
+}
+
+model RiskFactor {
+  id             String         @id @default(uuid())
+  assessmentId   String
+  category       String
+  factorTitle    String
+  description    String         @db.Text
+  impact         FactorImpact   @default(NORMAL_BASELINE)
+  sourceFieldRef String
+  observedValue  String?
+  referenceRange String?
+  createdAt      DateTime       @default(now())
+
+  assessment     RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+}
+
+model ClinicalAlert {
+  id              String         @id @default(uuid())
+  assessmentId    String
+  alertType       String
+  severity        String
+  headline        String
+  detailedMessage String         @db.Text
+  acknowledged    Boolean        @default(false)
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  createdAt       DateTime       @default(now())
+
+  assessment      RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@index([severity])
+}
+
+model ClinicianReview {
+  id               String         @id @default(uuid())
+  assessmentId     String
+  reviewerId       String?
+  reviewer         User?          @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewerName     String
+  reviewerRole     String
+  decision         ReviewStatus
+  originalLevel    RiskLevel
+  finalLevel       RiskLevel
+  clinicalNotes    String         @db.Text
+  escalationRaised Boolean        @default(false)
+  reviewedAt       DateTime       @default(now())
+
+  assessment       RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@index([reviewerId])
+}
+
+// ----------------------------------------------------------------------------
+// MEMBER 3: HEALTHCARE PROVIDER DIRECTORY & SERVICE DISCOVERY
+// ----------------------------------------------------------------------------
+
+enum FacilityType {
+  HOSPITAL
+  CLINIC
+  DIAGNOSTIC_CENTER
+  WOUND_CARE_CENTER
+  SURGICAL_REHAB
+}
+
+enum VerificationStatus {
+  SEEDED_DEMO
+  UNVERIFIED
+  PENDING_REVIEW
+  VERIFIED
+}
+
+enum ProviderDataSource {
+  SYNTHETIC_SEED
+  COMMUNITY_SUBMISSION
+  OFFICIAL_REGISTRY
+  PARTNER_HEALTH_SYSTEM
+}
+
+enum ServiceCategory {
+  WOUND_CARE
+  SUTURE_REMOVAL
+  DRAIN_MANAGEMENT
+  POST_OP_LABS
+  IMAGING_XRAY
+  PHYSIOTHERAPY
+  GENERAL_POST_OP_EVAL
+}
+
+enum ReferralStatus {
+  DRAFT
+  PENDING_CLINICIAN_APPROVAL
+  DISPATCHED_TO_LOCAL
+  ACCEPTED_BY_LOCAL
+  COMPLETED
+  DECLINED
+  CANCELLED
+}
+
+model HealthcareFacility {
+  id                 String             @id @default(uuid())
+  name               String
+  facilityType       FacilityType       @default(CLINIC)
+  addressLine1       String
+  addressLine2       String?
+  city               String
+  state              String
+  postalCode         String
+  country            String             @default("India")
+  latitude           Float?
+  longitude          Float?
+  phone              String?
+  email              String?
+  websiteUrl         String?
+  operatingHours     Json?
+  verificationStatus VerificationStatus @default(SEEDED_DEMO)
+  dataSource         ProviderDataSource @default(SYNTHETIC_SEED)
+  lastVerifiedAt     DateTime?
+  emergencyCapable   Boolean            @default(false)
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  services           FacilityService[]
+  verifications      ProviderVerificationRecord[]
+  referrals          CareReferral[]
+  appointments       Appointment[]
+
+  @@index([city, state])
+  @@index([postalCode])
+  @@index([facilityType])
+  @@index([verificationStatus])
+  @@index([latitude, longitude])
+}
+
+model FacilityService {
+  id                 String             @id @default(uuid())
+  facilityId         String
+  serviceCategory    ServiceCategory
+  specialtyName      String
+  availableDays      Json?
+  requiresPreBooking Boolean            @default(true)
+  estimatedCostINR   Float?
+  description        String?            @db.Text
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  facility           HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@index([facilityId])
+  @@index([serviceCategory])
+}
+
+model ProviderVerificationRecord {
+  id                String             @id @default(uuid())
+  facilityId        String
+  status            VerificationStatus
+  verifierUserId    String?
+  verifier          User?              @relation(fields: [verifierUserId], references: [id], onDelete: SetNull)
+  evidenceNotes     String             @db.Text
+  registryLicenseNo String?
+  verifiedAt        DateTime           @default(now())
+
+  facility          HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@index([facilityId])
+  @@index([verifierUserId])
+}
+
+model CareReferral {
+  id                   String             @id @default(uuid())
+  patientId            String
+  facilityId           String
+  requestedServices    Json
+  referralStatus       ReferralStatus     @default(DRAFT)
+  urgencyLevel         String             @default("ROUTINE")
+  clinicalSummary      String             @db.Text
+  attendingPhysicianId String?
+  approvedAt           DateTime?
+  scheduledDate        DateTime?
+  completionNotes      String?            @db.Text
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  patient              Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  facility             HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([facilityId])
+  @@index([referralStatus])
+}
+
+model Provider {
+  id                 String             @id @default(uuid())
+  name               String
+  facilityType       String
+  city               String
+  state              String
+  distanceKm         Float?
+  verificationStatus VerificationStatus @default(SEEDED_DEMO)
+  servicesOffered    String[]
+  contactPhone       String
+  appointments       Appointment[]
+}
+
+// ----------------------------------------------------------------------------
+// MEMBER 4: TRAVEL OPTIMIZATION & ESCALATION
+// ----------------------------------------------------------------------------
+
+model TravelComparison {
+  id                      String         @id @default(uuid())
+  patientId               String
+  originCity              String
+  destinationHospital     String
+  roundTripDistanceKm     Float
+  estimatedTravelHours    Float
+  estimatedCostInr        Float
+  recommendedOption       String
+  recommendationRationale String         @db.Text
+  isEscalated             Boolean        @default(false)
+  createdAt               DateTime       @default(now())
+
+  patient                 Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  followUpPlans           FollowUpPlan[]
+
+  @@index([patientId])
+}
+
+// ----------------------------------------------------------------------------
+// MEMBER 5: FOLLOW-UP, TELECONSULTATION & ORCHESTRATION
+// ----------------------------------------------------------------------------
+
+enum FollowUpPlanStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum AppointmentType {
+  TELECONSULTATION
+  LOCAL_CLINIC_VISIT
+  HOSPITAL_RETURN
+  DIAGNOSTIC_LAB
+}
+
+enum AppointmentStatus {
+  PROPOSED
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  RESCHEDULED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TeleSessionStatus {
+  PENDING
+  READY
+  ACTIVE
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum NotificationType {
+  APPOINTMENT_SCHEDULED
+  APPOINTMENT_REMINDER
+  TELECONSULT_LINK_READY
+  PLAN_UPDATED
+  PAYMENT_CONFIRMED
+  CLINICAL_ALERT
+}
+
+model FollowUpPlan {
+  id                      String             @id @default(uuid())
+  patientId               String
+  riskAssessmentId        String?
+  travelComparisonId      String?
+  title                   String
+  clinicalSummary         String             @db.Text
+  status                  FollowUpPlanStatus @default(DRAFT)
+  approvedByClinician     String?
+  approvedByClinicianId   String?
+  approvedByClinicianUser User?              @relation(fields: [approvedByClinicianId], references: [id], onDelete: SetNull)
+  approvedAt              DateTime?
+  startDate               DateTime
+  targetCompletionDate    DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  patient                 Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  riskAssessment          RiskAssessment?    @relation(fields: [riskAssessmentId], references: [id], onDelete: SetNull)
+  travelComparison        TravelComparison?  @relation(fields: [travelComparisonId], references: [id], onDelete: SetNull)
+
+  appointments            Appointment[]
+  teleSessions            TeleconsultationSession[]
+  paymentOrders           PaymentOrder[]
+
+  @@index([patientId])
+  @@index([status])
+  @@index([approvedByClinicianId])
+}
+
+model Appointment {
+  id                 String             @id @default(uuid())
+  planId             String
+  patientId          String
+  facilityId         String?
+  providerId         String?
+  type               AppointmentType
+  status             AppointmentStatus  @default(PROPOSED)
+  scheduledStartTime DateTime
+  scheduledEndTime   DateTime
+  locationOrService  String
+  clinicalNotes      String?            @db.Text
+  cancellationReason String?            @db.Text
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  plan               FollowUpPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  patient            Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  facility           HealthcareFacility? @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  provider           Provider?          @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  teleSession        TeleconsultationSession?
+  outcomeRecord      ConsultationRecord?
+  paymentOrders      PaymentOrder[]
+
+  @@index([planId])
+  @@index([patientId])
+  @@index([facilityId])
+  @@index([status])
+}
+
+model TeleconsultationSession {
+  id            String            @id @default(uuid())
+  planId        String
+  appointmentId String            @unique
+  roomName      String            @unique
+  domain        String            @default("meet.jit.si")
+  status        TeleSessionStatus @default(PENDING)
+  jwtToken      String?           @db.Text
+  startedAt     DateTime?
+  endedAt       DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  plan          FollowUpPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  appointment   Appointment       @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  outcomeRecord ConsultationRecord?
+
+  @@index([roomName])
+}
+
+model ConsultationRecord {
+  id                String                  @id @default(uuid())
+  appointmentId     String                  @unique
+  teleSessionId     String?                 @unique
+  clinicianId       String
+  subjectiveNotes   String                  @db.Text
+  objectiveFindings String?                 @db.Text
+  assessmentPlan    String                  @db.Text
+  followUpRequired  Boolean                 @default(false)
+  nextFollowUpDate  DateTime?
+  completedAt       DateTime                @default(now())
+
+  appointment       Appointment             @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  teleSession       TeleconsultationSession? @relation(fields: [teleSessionId], references: [id], onDelete: SetNull)
+}
+
+model PaymentOrder {
+  id                String        @id @default(uuid())
+  userId            String?
+  planId            String
+  appointmentId     String?
+  amount            Int           // In paise (INR)
+  currency          String        @default("INR")
+  receipt           String        @unique
+  status            PaymentStatus @default(PENDING)
+  razorpayOrderId   String        @unique
+  razorpayPaymentId String?       @unique
+  razorpaySignature String?
+  signatureVerified Boolean       @default(false)
+  verifiedAt        DateTime?
+  failureReason     String?
+  webhookEventId    String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  plan              FollowUpPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  appointment       Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([appointmentId])
+  @@index([razorpayOrderId])
+  @@index([webhookEventId])
+}
+
+model Notification {
+  id              String           @id @default(uuid())
+  recipientUserId String
+  type            NotificationType
+  title           String
+  message         String           @db.Text
+  read            Boolean          @default(false)
+  deliveryStatus  String           @default("SIMULATED")
+  linkUrl         String?
+  createdAt       DateTime         @default(now())
+
+  recipient       User             @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId])
+}

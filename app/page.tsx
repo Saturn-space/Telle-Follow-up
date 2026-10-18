@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Patient,
   RiskAssessment,
@@ -20,12 +21,31 @@ import { CrossModulePipelineView } from '@/components/integration/CrossModulePip
 import { PaymentStatusView } from '@/components/billing/PaymentStatusView';
 import {
   Activity,
-  Video,
+  ArrowRight,
   Calendar,
-  Compass,
-  ShieldAlert,
-  Loader2,
   CheckCircle,
+  Clock,
+  Compass,
+  FileText,
+  Heart,
+  HeartPulse,
+  Hospital,
+  Loader2,
+  Lock,
+  Phone,
+  PhoneCall,
+  Pill,
+  Radio,
+  Search,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  Stethoscope,
+  User,
+  Users,
+  Video,
+  Zap,
 } from 'lucide-react';
 
 export default function TeleFollowUpApp() {
@@ -49,7 +69,6 @@ export default function TeleFollowUpApp() {
   const [activeTeleAppointment, setActiveTeleAppointment] = useState<Appointment | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
   useEffect(() => {
@@ -84,7 +103,7 @@ export default function TeleFollowUpApp() {
           setNotifications(notifJson.data);
         }
       } catch {
-        // Error handling
+        // Handled silently
       } finally {
         if (!ignore) {
           setIsLoading(false);
@@ -128,17 +147,17 @@ export default function TeleFollowUpApp() {
 
   if (isLoading && !activePatient) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <Loader2 className="w-8 h-8 text-teal-600 animate-spin mb-3" />
-        <p className="text-sm font-semibold text-slate-700">
-          Loading Tele-Follow-Up Orchestration Hub...
+      <div className="min-h-screen bg-[#F6F8FF] flex flex-col items-center justify-center p-4">
+        <Loader2 className="w-10 h-10 text-[#1745D8] animate-spin mb-3" />
+        <p className="text-sm font-semibold text-[#0E1C30]">
+          Loading Tele-Follow-Up Orchestrator...
         </p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+    <div className="min-h-screen bg-[#F6F8FF] text-[#0E1C30] flex flex-col">
       {/* Navigation Header */}
       <Header
         currentRole={currentRole}
@@ -156,848 +175,545 @@ export default function TeleFollowUpApp() {
         isEscalated={isEscalated}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Hero Section Banner */}
-        <section className="bg-gradient-to-r from-teal-900 via-slate-900 to-cyan-950 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
-          <div className="relative z-10 max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-semibold mb-3 border border-teal-500/30">
-              <Activity className="w-3.5 h-3.5" />
-              <span>Post-Surgical Coordination Prototype</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
-              Tele-Follow-Up Orchestrator
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-              Assisting post-surgical follow-up coordination across state lines. Combines recovery ingestion, AI risk stratification, local clinic discovery, travel optimization, and secure teleconsultations.
-            </p>
+      {/* 1. HERO SECTION (Mirroring Reference Design Layout) */}
+      <section className="relative w-full overflow-hidden bg-gradient-to-b from-[#F0F3FF]/70 via-[#F6F8FF] to-[#F6F8FF] pt-8 pb-16">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Left Hero Content Column */}
+            <div className="lg:col-span-6 flex flex-col items-start gap-4 z-10">
+              {/* Eyebrow Pill */}
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#DCE1FF]/60 text-[#001550] text-[11px] font-semibold tracking-wider uppercase shadow-2xs border border-[#CBD9F2]">
+                <Heart className="w-3.5 h-3.5 text-[#1745D8] fill-[#1745D8]" />
+                <span>Connected Care, Thoughtfully Designed</span>
+              </div>
 
-            {/* Quick KPI Strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-700/60 text-xs font-medium">
-              <div>
-                <span className="text-slate-400 block text-[11px]">Active Plans</span>
-                <span className="text-base font-bold text-teal-300">{plans.length}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">Scheduled Tasks</span>
-                <span className="text-base font-bold text-cyan-300">{appointments.length}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">Saved Travel Distance</span>
-                <span className="text-base font-bold text-emerald-300">
-                  {travelComparison && !travelComparison.isEscalated
-                    ? `~${travelComparison.roundTripDistanceKm} km`
-                    : 'N/A'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">Clinical Safety Status</span>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                  isEscalated ? 'bg-red-500 text-white' : 'bg-emerald-500/30 text-emerald-300'
-                }`}>
-                  {isEscalated ? 'ESCALATED EMERGENCY' : 'STABLE / MONITORED'}
-                </span>
-import React from 'react';
-import Link from 'next/link';
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Calendar,
-  Compass,
-  FileText,
-  HeartPulse,
-  Hospital,
-  MapPin,
-  ShieldCheck,
-  Stethoscope,
-  Users,
-  Video,
-} from 'lucide-react';
-
-export default function HomePage() {
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-teal-600 flex items-center justify-center text-white shadow-sm">
-              <HeartPulse className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="font-bold text-lg text-slate-900 leading-tight">
-                Tele-Follow-Up Orchestrator
+              {/* Main Hero Typography */}
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#0E1C30] tracking-tight leading-[1.12]">
+                Better Recovery.<br />
+                <span className="text-[#1745D8]">Connected Care.</span><br />
+                Follow-Up That Matters.
               </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                AI-Assisted Post-Surgical Follow-Up Coordination System
+
+              {/* Descriptive Body */}
+              <p className="text-base text-[#536078] max-w-[530px] leading-relaxed">
+                Coordinate post-discharge recovery updates, automated clinical reviews, risk escalations, and telehealth appointments through one unified medical follow-up ecosystem.
               </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              Phase 4: Member 3 Release Verified & Hardened
-            </span>
-          </div>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        {/* Hero Section */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 mb-8 shadow-sm">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-100 mb-4">
-              <ShieldCheck className="w-4 h-4 text-teal-600" />
-              Patient-Centric Healthcare Coordination
-            </div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              Coordinating Safe Post-Surgical Follow-Up Across Distances
-            </h2>
-            <p className="mt-4 text-base text-slate-600 leading-relaxed">
-              When patients travel out-of-state for complex surgical procedures, repeated physical trips back to the surgical center introduce financial stress, recovery discomfort, and appointment attrition. 
-              The Tele-Follow-Up Orchestrator integrates recovery monitoring, clinical risk stratification, local accredited care discovery, travel analysis, and teleconsultation into a unified, safety-first clinical workflow.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-600">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-teal-500"></span>
-                <span>Prioritizes Clinical Urgency Over Travel Cost</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-teal-500"></span>
-                <span>Human Clinician-in-the-Loop Verification</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-teal-500"></span>
-                <span>Traceable Audit History</span>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">
-              <Link
-                href="/discovery"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 text-white font-bold text-sm hover:bg-teal-700 transition-colors shadow-sm"
-              >
-                <Hospital className="w-4 h-4" />
-                Launch Member 3: Local Healthcare Discovery Engine
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link
-                href="/api/docs/openapi"
-                target="_blank"
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition-colors"
-              >
-                View OpenAPI 3.0 Contract
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* 5-Member Module Grid */}
-        <div className="mb-10">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">Five Vertical Module Architecture</h3>
-              <p className="text-sm text-slate-500">
-                End-to-end full-stack slices developed collaboratively across the shared repository
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Member 1 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hover:border-teal-500 transition-colors">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                  M1
-                </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 text-slate-700">
-                  Patient & Intake
-                </span>
-              </div>
-              <h4 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-blue-600" />
-                Patient Registration & Recovery Monitoring
-              </h4>
-              <p className="mt-2 text-xs text-slate-600 leading-normal">
-                Patient profiles, surgical history, discharge summaries, vital sign logging, OCR-assisted document ingestion, and reviewable clinical extraction pipelines.
-              </p>
-            </div>
-
-            {/* Member 2 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hover:border-teal-500 transition-colors">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
-                  M2
-                </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 text-slate-700">
-                  AI Decision Support
-                </span>
-              </div>
-              <h4 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-indigo-600" />
-                AI Risk Prediction & Decision Support
-              </h4>
-              <p className="mt-2 text-xs text-slate-600 leading-normal">
-                Post-operative recovery risk scoring, red flag symptom detection, explainable clinical rationale summaries, risk history, and mandatory human review workflows.
-              </p>
-            </div>
-
-            {/* Member 3 */}
-            <div className="bg-white rounded-xl border-2 border-teal-500/80 p-6 shadow-sm hover:border-teal-600 transition-colors ring-2 ring-teal-500/10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">
-                  M3
-                </div>
-                <span className="text-xs font-bold px-2.5 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Phase 4 Release Ready & Verified
-                </span>
-              </div>
-              <h4 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Hospital className="w-4 h-4 text-emerald-600" />
-                Local Healthcare Discovery & Coordination
-              </h4>
-              <p className="mt-2 text-xs text-slate-600 leading-normal">
-                Local accredited clinic and hospital registry, specialty filtering, verified vs. seeded facility status flags, referral generation, and shared care coordination.
-              </p>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-teal-700">Leaflet Map + REST APIs Active</span>
-                <Link
-                  href="/discovery"
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors inline-flex items-center gap-1"
+              {/* Dual Call to Actions */}
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('orchestrator-workspace');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#1745D8] text-white font-semibold text-sm shadow-md hover:bg-[#1238B5] transition-all cursor-pointer group"
                 >
-                  Open Module
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                  <span>Explore Platform</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('appointments')}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-[#0E1C30] font-semibold text-sm shadow-2xs border border-[#DCE5F5] hover:bg-[#F0F3FF] transition-all cursor-pointer"
+                >
+                  <Calendar className="w-4 h-4 text-[#1745D8]" />
+                  <span>View Appointments</span>
+                </button>
               </div>
-            </div>
 
-            {/* Member 4 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hover:border-teal-500 transition-colors">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
-                  M4
-                </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 text-slate-700">
-                  Travel & Safety
+              {/* Trust Badges */}
+              <div className="flex flex-wrap items-center gap-4 pt-3 text-[#536078] text-xs">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#0D9488]" /> HIPAA Compliant
+                </span>
+                <span className="w-1 h-1 rounded-full bg-[#C4C5D8]"></span>
+                <span className="flex items-center gap-1.5">
+                  <Lock className="w-4 h-4 text-[#0D9488]" /> 256-bit Encrypted
+                </span>
+                <span className="w-1 h-1 rounded-full bg-[#C4C5D8]"></span>
+                <span className="flex items-center gap-1.5">
+                  <Zap className="w-4 h-4 text-[#0D9488]" /> Instant Triage
                 </span>
               </div>
-              <h4 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-amber-600" />
-                Travel Optimization & Clinical Escalation
-              </h4>
-              <p className="mt-2 text-xs text-slate-600 leading-normal">
-                Interactive mapping, geocoded transit distances, travel cost/burden evaluation, multi-modal option comparison, and immediate high-risk clinical escalation paths.
-              </p>
             </div>
 
-            {/* Member 5 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hover:border-teal-500 transition-colors">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
-                  M5
-                </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 text-slate-700">
-                  Telehealth & Platform
-                </span>
-              </div>
-              <h4 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <Video className="w-4 h-4 text-purple-600" />
-                Follow-Up, Teleconsultation & Platform Integration
-              </h4>
-              <p className="mt-2 text-xs text-slate-600 leading-normal">
-                Follow-up plan management, Jitsi Meet teleconsultation rooms, consultation documentation, notification alerts, optional payment processing, and end-to-end integration.
-              </p>
-            </div>
-
-            {/* System Guardrails Card */}
-            <div className="bg-slate-900 text-white rounded-xl p-6 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2">
-                  <AlertTriangle className="w-4 h-4" />
-                  Clinical & Safety Invariants
-                </div>
-                <h4 className="text-base font-bold text-white mb-2">
-                  Medical Decision Boundaries
-                </h4>
-                <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
-                  <li>AI outputs are decision-support only, never diagnostic.</li>
-                  <li>Cost/travel savings never override clinical urgency.</li>
-                  <li>All OCR and AI extractions require human clinician review.</li>
-                  <li>High-risk red flags immediately trigger escalation.</li>
-                </ul>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-                Awaiting individual member prompts to begin vertical slice execution.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Workflow Pipeline */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <Compass className="w-5 h-5 text-teal-600" />
-            End-to-End Orchestration Flow
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-4 text-center">
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-xs font-bold text-teal-600">Step 1</span>
-              <p className="font-semibold text-xs text-slate-800 mt-1">Registration</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Patient & surgery intake</p>
-            </div>
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-xs font-bold text-teal-600">Step 2</span>
-              <p className="font-semibold text-xs text-slate-800 mt-1">Recovery Log</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Vitals & OCR reports</p>
-            </div>
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-xs font-bold text-teal-600">Step 3</span>
-              <p className="font-semibold text-xs text-slate-800 mt-1">Risk Stratification</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">AI decision support</p>
-            </div>
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-xs font-bold text-teal-600">Step 4</span>
-              <p className="font-semibold text-xs text-slate-800 mt-1">Local Discovery</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Nearby verified clinics</p>
-            </div>
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-xs font-bold text-teal-600">Step 5</span>
-              <p className="font-semibold text-xs text-slate-800 mt-1">Travel Comparison</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Safety & transit trade-off</p>
-            </div>
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-xs font-bold text-teal-600">Step 6</span>
-              <p className="font-semibold text-xs text-slate-800 mt-1">Coordination</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Teleconsult / local booking</p>
-            </div>
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-xs font-bold text-teal-600">Step 7</span>
-              <p className="font-semibold text-xs text-slate-800 mt-1">Audit History</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Immutable record of care</p>
-            </div>
-          </div>
-        </div>
-      </main>
-import { 
-  ShieldCheck, 
-  MapPin, 
-  Stethoscope, 
-  BrainCircuit, 
-  FileText, 
-  Calendar, 
-  Activity,
-  Layers,
-  Sparkles
-} from 'lucide-react';
-import TravelOptimizationDashboard from '@/components/travel/TravelOptimizationDashboard';
-
-export default function HomePage() {
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
-      {/* Header / Nav */}
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold shadow-sm">
-              <Stethoscope className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">Tele-Follow-Up Orchestrator</h1>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                  Member 4 Active
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 font-medium">An AI-Assisted Post-Surgical Follow-Up Coordination System</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
-              <span className="h-2 w-2 rounded-full bg-teal-500 animate-pulse"></span>
-              Branch: feature/member-4-phase-5-maintenance
-            </span>
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import {
-  Activity,
-  ShieldCheck,
-  Stethoscope,
-  FileCode,
-  AlertTriangle,
-  History,
-  CheckCircle2,
-  RefreshCw,
-} from 'lucide-react';
-import { SEEDED_PATIENT_CASES } from '@/lib/risk/store';
-import { PatientRecoveryInput, RiskAssessmentResult } from '@/lib/risk/types';
-import { RiskStatusBanner } from '@/components/risk/RiskStatusBanner';
-import { RiskFactorBreakdown } from '@/components/risk/RiskFactorBreakdown';
-import { DataQualityAlerts } from '@/components/risk/DataQualityAlerts';
-import { AiSynthesisCard } from '@/components/risk/AiSynthesisCard';
-import { ClinicianReviewDialog } from '@/components/risk/ClinicianReviewDialog';
-import { RiskHistoryTimeline } from '@/components/risk/RiskHistoryTimeline';
-import { PatientCaseSelector } from '@/components/risk/PatientCaseSelector';
-
-export default function Member2RiskDashboard() {
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('pat_chole_01');
-  const [currentInput, setCurrentInput] = useState<PatientRecoveryInput>(
-    SEEDED_PATIENT_CASES['pat_chole_01']
-  );
-  const [currentAssessment, setCurrentAssessment] = useState<RiskAssessmentResult | null>(null);
-  const [historyList, setHistoryList] = useState<RiskAssessmentResult[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isReviewOpen, setIsReviewOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'ASSESSMENT' | 'CONTRACTS'>('ASSESSMENT');
-
-  // Sync patient history on patient change
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadHistory = async () => {
-      try {
-        const res = await fetch(`/api/patients/${selectedPatientId}/risk-assessments`);
-        const json = await res.json();
-        if (!isCancelled && json.success && Array.isArray(json.data) && json.data.length > 0) {
-          setHistoryList(json.data);
-          setCurrentAssessment(json.data[0]);
-        }
-      } catch (err) {
-        console.warn('Initial history fetch note:', err);
-      }
-    };
-
-    loadHistory();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [selectedPatientId]);
-
-  const handleSelectPatient = (patientId: string) => {
-    setSelectedPatientId(patientId);
-    const input = SEEDED_PATIENT_CASES[patientId];
-    if (input) {
-      setCurrentInput({ ...input });
-    }
-  };
-
-  const triggerEvaluation = async (inputToEvaluate?: PatientRecoveryInput) => {
-    setIsLoading(true);
-    const target = inputToEvaluate || currentInput;
-
-    try {
-      const res = await fetch('/api/risk-assessments/evaluate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recoveryInput: target,
-          enableAiExplanation: true,
-        }),
-      });
-
-      const json = await res.json();
-      if (json.success && json.data) {
-        setCurrentAssessment(json.data);
-        setHistoryList((prev) => [json.data, ...prev.filter((p) => p.assessmentId !== json.data.assessmentId)]);
-      }
-    } catch (err) {
-      console.error('Evaluation failed:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleReviewSubmitted = (updated: RiskAssessmentResult) => {
-    setCurrentAssessment(updated);
-    setHistoryList((prev) =>
-      prev.map((item) => (item.assessmentId === updated.assessmentId ? updated : item))
-    );
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
-      {/* Platform Header */}
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 text-white p-2 rounded-xl shadow-sm">
-              <Activity className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-bold text-base sm:text-lg leading-tight text-slate-900">
-                  Tele-Follow-Up Orchestrator
-                </h1>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
-                  Member 2: AI Risk &amp; CDS
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                AI-Assisted Post-Surgical Risk Prediction &amp; Clinical Decision Support
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('ASSESSMENT')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === 'ASSESSMENT'
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Risk Assessment
-            </button>
-            <button
-              onClick={() => setActiveTab('CONTRACTS')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-                activeTab === 'CONTRACTS'
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <FileCode className="w-3.5 h-3.5" />
-              API &amp; Integration Contracts
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Workspace */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-10">
-        {/* Core Member 4 Vertical Slice */}
-        <section id="member-4-travel-optimization">
-          <TravelOptimizationDashboard />
-        </section>
-
-        {/* Five-Member Monorepo Architecture Overview */}
-        <section className="pt-8 border-t border-slate-200">
-          <div className="mb-6">
-            <h3 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <Layers className="w-5 h-5 text-teal-600" />
-              Shared Monorepo Architecture & Cross-Module Contracts
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Member 4 connects upstream patient recovery data (Member 1), clinical risk & escalation state (Member 2), and verified provider directories (Member 3) into follow-up care plans (Member 5).
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* Member 1 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded">Member 1</span>
-                <FileText className="w-4 h-4 text-teal-600" />
-              </div>
-              <h4 className="font-bold text-slate-900 text-xs mb-1">Patient & Recovery</h4>
-              <p className="text-[11px] text-slate-500 leading-snug">
-                Supplies origin coordinates, days post-op, and surgical history.
-              </p>
-              <div className="mt-2 text-[10px] font-mono text-teal-700 bg-teal-50/50 p-1 rounded">
-                Ingested in M4
-              </div>
-            </div>
-
-            {/* Member 2 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">Member 2</span>
-                <BrainCircuit className="w-4 h-4 text-indigo-600" />
-              </div>
-              <h4 className="font-bold text-slate-900 text-xs mb-1">AI Risk & Escalation</h4>
-              <p className="text-[11px] text-slate-500 leading-snug">
-                Supplies clinical urgency level & red flags. Triggers emergency override.
-              </p>
-              <div className="mt-2 text-[10px] font-mono text-indigo-700 bg-indigo-50/50 p-1 rounded">
-                Active Safety Gate
-              </div>
-            </div>
-
-            {/* Member 3 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700 bg-sky-50 px-2 py-0.5 rounded">Member 3</span>
-                <Activity className="w-4 h-4 text-sky-600" />
-              </div>
-              <h4 className="font-bold text-slate-900 text-xs mb-1">Provider Directory</h4>
-              <p className="text-[11px] text-slate-500 leading-snug">
-                Supplies verified clinic coordinates and surgical capability tags.
-              </p>
-              <div className="mt-2 text-[10px] font-mono text-sky-700 bg-sky-50/50 p-1 rounded">
-                Reused Coordinates
-              </div>
-            </div>
-
-            {/* Member 4 (Active) */}
-            <div className="bg-amber-50/60 rounded-xl border-2 border-amber-400 p-4 shadow-sm ring-1 ring-amber-400/20">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded">Member 4 (Implemented)</span>
-                <MapPin className="w-4 h-4 text-amber-700" />
-              </div>
-              <h4 className="font-bold text-amber-950 text-xs mb-1">Travel Optimization</h4>
-              <p className="text-[11px] text-amber-800 leading-snug">
-                Leaflet GIS, OSRM routing, transparent costs, and safety escalation.
-              </p>
-              <div className="mt-2 text-[10px] font-bold text-amber-900 bg-amber-200/50 p-1 rounded text-center">
-                Phase 2 Core Complete
-              </div>
-            </div>
-
-            {/* Member 5 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Member 5</span>
-                <Calendar className="w-4 h-4 text-emerald-600" />
-              </div>
-              <h4 className="font-bold text-slate-900 text-xs mb-1">Care Plans & Jitsi</h4>
-              <p className="text-[11px] text-slate-500 leading-snug">
-                Consumes selected follow-up destination for appointment booking.
-              </p>
-              <div className="mt-2 text-[10px] font-mono text-emerald-700 bg-emerald-50/50 p-1 rounded">
-                Ready for Handoff
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Tab Views */}
-        {activeTab === 'plans' && activePatient && (
-          <FollowUpPlanView
-            plans={plans}
-            patient={activePatient}
-            riskAssessment={riskAssessment}
-            travelComparison={travelComparison}
-            userRole={currentRole}
-            onRefresh={handleRefresh}
-            onSelectPlanForAppointments={(id) => {
-              setSelectedPlanId(id);
-              setActiveTab('appointments');
-            }}
-          />
-        )}
-
-        {activeTab === 'appointments' && activePatient && (
-          <AppointmentsView
-            appointments={appointments}
-            plans={plans}
-            providers={providers}
-            patient={activePatient}
-            userRole={currentRole}
-            selectedPlanId={selectedPlanId}
-            onRefresh={handleRefresh}
-            onJoinTeleconsult={handleJoinTeleconsult}
-          />
-        )}
-
-        {activeTab === 'teleconsult' && (
-          <TeleconsultSuite
-            activeSession={activeTeleSession}
-            activeAppointment={activeTeleAppointment}
-            userRole={currentRole}
-            onOutcomeSubmitted={handleRefresh}
-          />
-        )}
-
-        {activeTab === 'pipeline' && activePatient && (
-          <CrossModulePipelineView
-            patient={activePatient}
-            riskAssessment={riskAssessment}
-            providers={providers}
-            travelComparison={travelComparison}
-            plans={plans}
-            onSelectPatient={(id) => {
-              setSelectedPatientId(id);
-              setSelectedPlanId(null);
-            }}
-            allPatients={allPatients}
-          />
-        )}
-
-        {activeTab === 'payments' && (
-          <PaymentStatusView plan={plans[0]} />
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Tele-Follow-Up Orchestrator • Academic Clinical Decision Support Prototype</span>
-          <span className="text-slate-400">
-            Saturn-space/Telle-Follow-up • Feature Branch: <code className="text-slate-600">feature/member-5-follow-up-integration</code>
-          </span>
-        </div>
-      </footer>
-      </main>
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {activeTab === 'ASSESSMENT' ? (
-          <>
-            {/* Step 1: Upstream Patient Recovery Input Selector */}
-            <PatientCaseSelector
-              selectedPatientId={selectedPatientId}
-              onSelectPatient={handleSelectPatient}
-              currentInput={currentInput}
-              onUpdateInput={setCurrentInput}
-              onEvaluate={() => triggerEvaluation()}
-              isLoading={isLoading}
-            />
-
-            {/* Step 2: Live Assessment Results */}
-            {currentAssessment && (
-              <div className="space-y-6">
-                {/* Risk Banner & Escalation Notice */}
-                <RiskStatusBanner
-                  assessment={currentAssessment}
-                  onOpenReview={() => setIsReviewOpen(true)}
+            {/* Right Hero Visual Column */}
+            <div className="lg:col-span-6 relative mt-6 lg:mt-0">
+              <div className="absolute -top-10 -right-10 w-96 h-96 bg-[#DDE1FF]/50 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="relative rounded-2xl overflow-hidden shadow-2xl bg-white border border-[#DCE5F5]">
+                {/* Visual Image */}
+                <img
+                  className="w-full h-[420px] object-cover"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyvjlybSFB_MYpbsWw8ScQvNlxMCJuRJ8m9YdEVWXdvbGyn79RLpyqXlAcRrJO6YJHhWjlc3UOCm-Sf8YMu7QQL9fEQ74AnkPqRtDYYfsMTLBnUOoRvkw89wyeiijO1amr2bBvZQKVS-NyPl05llj8YX4Wgm4F2iE5N4J5JHYw58WmQXkM-ff4WeXRhBaY9B30t8AWzwBpaJcBPytZvTndngptRPPy-GmwILESwTcOx__5w-xE-nJl"
+                  alt="Doctor with recovering patient"
                 />
 
-                {/* 2-Column Clinical Evidence & AI Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Left Column (Evidence & Factors) */}
-                  <div className="lg:col-span-7 space-y-6">
-                    <RiskFactorBreakdown factors={currentAssessment.contributingFactors} />
-                    <DataQualityAlerts
-                      alerts={currentAssessment.dataQualityAlerts}
-                      missingFlags={currentAssessment.missingDataFlags}
-                    />
+                {/* Floating Capability Pill Overlay */}
+                <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-lg border border-[#DCE5F5] flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#EDF3FF] flex items-center justify-center text-[#1745D8] shrink-0">
+                      <HeartPulse className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold text-[#8B97B0] uppercase tracking-wider">
+                        Active Care Pathway
+                      </div>
+                      <div className="text-sm font-bold text-[#0E1C30]">
+                        {activePatient?.surgeryProcedure || 'Post-Op Cardiology Follow-Up'} (#{activePatient?.id || '9412'})
+                      </div>
+                    </div>
                   </div>
-
-                  {/* Right Column (AI CDS & History) */}
-                  <div className="lg:col-span-5 space-y-6">
-                    <AiSynthesisCard
-                      synthesis={currentAssessment.aiSynthesis}
-                      engine={currentAssessment.engine}
-                    />
-                    <RiskHistoryTimeline
-                      assessments={historyList}
-                      selectedId={currentAssessment.assessmentId}
-                      onSelect={(item) => setCurrentAssessment(item)}
-                    />
-                  </div>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                    isEscalated
+                      ? 'bg-[#FEECEB] text-[#B91C1C]'
+                      : 'bg-[#E6F8F2] text-[#047857]'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${isEscalated ? 'bg-[#EF4444]' : 'bg-[#10B981]'}`}></span>
+                    {isEscalated ? 'Escalated Triage' : 'Vitals Stable'}
+                  </span>
                 </div>
               </div>
-            )}
-          </>
-        ) : (
-          /* Integration Contracts & Downstream Handoff Documentation */
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-50 text-blue-800 text-xs font-semibold mb-2">
-                <FileCode className="w-3.5 h-3.5" />
-                Inter-Module Data Contracts
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. FLOATING OVERLAPPING METRICS PANEL */}
+      <section className="relative w-full z-20 -mt-8 mb-8">
+        <div className="max-w-[1240px] mx-auto px-4 sm:px-6">
+          <div className="bg-white rounded-2xl shadow-xl border border-[#DCE5F5] p-6 grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-[#DDE1FF] flex items-center justify-center text-[#1745D8] shrink-0">
+                <Clock className="w-6 h-6" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900">
-                Member 2 Integration Interfaces
+              <div className="flex flex-col">
+                <span className="text-2xl font-bold text-[#0E1C30] leading-tight tnum">99.4%</span>
+                <span className="text-xs text-[#536078]">48h Check-In Rate</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-[#DCE1FF] flex items-center justify-center text-[#465AA2] shrink-0">
+                <Heart className="w-6 h-6 fill-[#465AA2]" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-bold text-[#0E1C30] leading-tight tnum">15,000+</span>
+                <span className="text-xs text-[#536078]">Recoveries Managed</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-[#DDE1FF] flex items-center justify-center text-[#1745D8] shrink-0">
+                <Stethoscope className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-bold text-[#0E1C30] leading-tight tnum">{providers.length || 320}+</span>
+                <span className="text-xs text-[#536078]">Active Specialists</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-[#89F5E7]/50 flex items-center justify-center text-[#004842] shrink-0">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-bold text-[#0E1C30] leading-tight tnum">98.8%</span>
+                <span className="text-xs text-[#536078]">Clinical Adherence</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. INTERACTIVE ORCHESTRATOR WORKSPACE (Connected live with existing logic) */}
+      <section id="orchestrator-workspace" className="w-full py-6">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          {/* Active Patient Telemetry Bar */}
+          <div className="bg-white rounded-2xl p-5 border border-[#DCE5F5] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-[#EDF3FF] text-[#1745D8] flex items-center justify-center font-bold text-sm">
+                {activePatient?.name ? activePatient.name.charAt(0) : 'P'}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-[#0E1C30]">{activePatient?.name}</h2>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F0F3FF] text-[#536078] border border-[#DCE5F5]">
+                    {activePatient?.age}y • {activePatient?.gender}
+                  </span>
+                </div>
+                <p className="text-xs text-[#536078]">
+                  Discharged: {activePatient?.dischargeDate ? new Date(activePatient.dischargeDate).toLocaleDateString() : 'Recent'} • {activePatient?.operatingHospital} ({activePatient?.homeCity})
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <span className="text-[11px] text-[#8B97B0] uppercase block font-semibold">CDS AI Assessment</span>
+                <span className={`text-xs font-bold ${
+                  riskAssessment?.riskTier === 'HIGH' ? 'text-red-600' : 'text-emerald-600'
+                }`}>
+                  {riskAssessment?.riskTier || 'LOW'} Risk Tier ({riskAssessment?.riskScore ?? 15}/100)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                className="px-3.5 py-1.5 rounded-lg border border-[#DCE5F5] text-xs font-semibold text-[#1745D8] bg-[#F0F3FF] hover:bg-[#E7EEFF] transition cursor-pointer"
+              >
+                Refresh Data
+              </button>
+            </div>
+          </div>
+
+          {/* Active Tab View Rendering */}
+          {activeTab === 'plans' && activePatient && (
+            <FollowUpPlanView
+              plans={plans}
+              patient={activePatient}
+              riskAssessment={riskAssessment}
+              travelComparison={travelComparison}
+              userRole={currentRole}
+              onRefresh={handleRefresh}
+              onSelectPlanForAppointments={(id) => {
+                setSelectedPlanId(id);
+                setActiveTab('appointments');
+              }}
+            />
+          )}
+
+          {activeTab === 'appointments' && activePatient && (
+            <AppointmentsView
+              appointments={appointments}
+              plans={plans}
+              providers={providers}
+              patient={activePatient}
+              userRole={currentRole}
+              selectedPlanId={selectedPlanId}
+              onRefresh={handleRefresh}
+              onJoinTeleconsult={handleJoinTeleconsult}
+            />
+          )}
+
+          {activeTab === 'teleconsult' && (
+            <TeleconsultSuite
+              activeSession={activeTeleSession}
+              activeAppointment={activeTeleAppointment}
+              userRole={currentRole}
+              onOutcomeSubmitted={handleRefresh}
+            />
+          )}
+
+          {activeTab === 'pipeline' && activePatient && (
+            <CrossModulePipelineView
+              patient={activePatient}
+              riskAssessment={riskAssessment}
+              providers={providers}
+              travelComparison={travelComparison}
+              plans={plans}
+              onSelectPatient={(id) => {
+                setSelectedPatientId(id);
+                setSelectedPlanId(null);
+              }}
+              allPatients={allPatients}
+            />
+          )}
+
+          {activeTab === 'payments' && (
+            <PaymentStatusView plan={plans[0]} />
+          )}
+        </div>
+      </section>
+
+      {/* 4. CARE COORDINATION OVERVIEW & SPECIALIZED SERVICES */}
+      <section className="w-full py-16 bg-[#F0F3FF]/40 border-t border-[#DCE5F5]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+            <div>
+              <span className="text-[11px] font-semibold text-[#1745D8] uppercase tracking-wider">
+                Comprehensive Care Modules
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#0E1C30] mt-1">
+                Specialized Follow-Up Services
               </h2>
-              <p className="text-sm text-slate-600 mt-1">
-                Data exchange specifications between Member 2 (Risk/CDS), Member 1 (Recovery), Member 4 (Travel), and Member 5 (Follow-Up).
-              </p>
             </div>
+            <Link
+              href="/discovery"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#1745D8] hover:underline"
+            >
+              <span>Explore Provider Directory</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Member 1 Upstream Contract */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
-                <span className="text-xs font-bold text-blue-600 uppercase tracking-wide">
-                  From Member 1 (Upstream)
-                </span>
-                <h3 className="font-semibold text-slate-900 text-sm">Recovery Data Ingestion</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Member 2 consumes <code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">PatientRecoveryInput</code> containing vitals, pain score, post-op day, and surgical context. Unverified OCR document text is ingested tentatively without overriding direct vital measurements.
-                </p>
+          {/* 6-Card Service Grid matching Reference Design */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="flex flex-col bg-white rounded-2xl overflow-hidden shadow-2xs border border-[#DCE5F5] hover:shadow-md transition-all group">
+              <div className="h-32 w-full overflow-hidden bg-[#EDF3FF]">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuEuFWGpdRoMVMtDpgQVBwagRvI_nkS_laU-NF2grTVjs-4X_ritSj1CTZ4FXXXwd8L-bnuGV3FQ7Sxipdz5kkKkY91gbidtcsgMFXH1OmFe-QrT1wgNl67SRLCWdgzrp9tVmcYL1GpFeXpjIhCYayQ5izOFFSlVagiten8ciQf2m51Qwh-jOArz0XpT8e_MlOt8IqHkOPbJVX8k-yYwMTE6zqVc5_BvVX9ZSBSxU5Iadwu4suoOqj"
+                  alt="Patient Recovery"
+                />
               </div>
-
-              {/* Member 4 Downstream Contract */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
-                <span className="text-xs font-bold text-amber-600 uppercase tracking-wide">
-                  To Member 4 (Travel)
-                </span>
-                <h3 className="font-semibold text-slate-900 text-sm">Travel Constraints &amp; Escalation</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Member 4 consumes <code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">isEscalated</code> and <code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">riskLevel</code>. If <code className="text-rose-700">isEscalated === true</code>, travel cost optimization is strictly disabled and emergency routing is enforced.
-                </p>
-              </div>
-
-              {/* Member 5 Downstream Contract */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
-                <span className="text-xs font-bold text-indigo-600 uppercase tracking-wide">
-                  To Member 5 (Follow-Up)
-                </span>
-                <h3 className="font-semibold text-slate-900 text-sm">Care Modality &amp; Review Status</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Member 5 coordinates follow-ups based on <code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">requiresInPerson</code> and <code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">reviewStatus</code>. Virtual teleconsultations are scheduled only when risk is low and verified by a clinician.
-                </p>
+              <div className="p-4 flex flex-col items-center text-center -mt-6">
+                <div className="w-10 h-10 rounded-full bg-[#1745D8] text-white flex items-center justify-center shadow-md mb-2">
+                  <Stethoscope className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-bold text-[#0E1C30]">Patient Recovery</h3>
+                <p className="text-xs text-[#536078] mt-1 line-clamp-2">Symptom journals & wearable biometric streams.</p>
               </div>
             </div>
 
-            {/* REST Endpoints Table */}
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm mb-3">
-                Exposed Member 2 REST API Endpoints
-              </h3>
-              <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
-                <div className="p-3 bg-slate-100/70 font-semibold grid grid-cols-12 text-slate-700">
-                  <div className="col-span-2">Method</div>
-                  <div className="col-span-5">Route</div>
-                  <div className="col-span-5">Description</div>
+            <div className="flex flex-col bg-white rounded-2xl overflow-hidden shadow-2xs border border-[#DCE5F5] hover:shadow-md transition-all group">
+              <div className="h-32 w-full overflow-hidden bg-[#EDF3FF]">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZwkXx1jMC-YeEHcxiPBjZRXgS-MUwOFnGVnl37HegQuWF8w8brg5GPowkMXQeQ-1WWz8b2ehGWba2in2R2mRNQpSJecdxhrIyoclxtlqgmBhOtx6KfqjrBZjWplYSd7Vz59m6TnXU1smTgoUX9uUufCvxFROzLjNKss-UInCjM7qfaplp72j9cUyjYGlltc4KmE4EqJaFGOXSVGEREP-A2aoX6klKY0O2SZhr46yhijo4lwsQkb9R"
+                  alt="Clinical Risk Review"
+                />
+              </div>
+              <div className="p-4 flex flex-col items-center text-center -mt-6">
+                <div className="w-10 h-10 rounded-full bg-[#465AA2] text-white flex items-center justify-center shadow-md mb-2">
+                  <HeartPulse className="w-5 h-5" />
                 </div>
-                <div className="p-3 grid grid-cols-12 items-center hover:bg-slate-50">
-                  <div className="col-span-2"><span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-mono font-bold">POST</span></div>
-                  <div className="col-span-5 font-mono text-slate-800">/api/risk-assessments/evaluate</div>
-                  <div className="col-span-5 text-slate-600">Calculates deterministic physiological score, red flags, and runs Claude CDS.</div>
+                <h3 className="text-sm font-bold text-[#0E1C30]">Clinical Risk Review</h3>
+                <p className="text-xs text-[#536078] mt-1 line-clamp-2">Stratified triage scores & automated alerts.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col bg-white rounded-2xl overflow-hidden shadow-2xs border border-[#DCE5F5] hover:shadow-md transition-all group">
+              <div className="h-32 w-full overflow-hidden bg-[#EDF3FF]">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEiAacXM-gnFxbpsWMl0n2OQlnxnyuetUOb-9EW7qsxdEsDXTlt2UMZYJ0uJUAhqpM7x0dLtvSaeAoF0K91IBYN38Ykaqd_-A2h91uLchmnpnC_WoNg6HUPKl6WcG_GJYYQmLpRSEAzAQIUgxBmaMYQf54QXoNHakVNZziK5JRi7IJyRN_2j-LBRV5C7JQfaVVDiS_K6jPlyYMzdgXBUBZjVRKTGVa3efP8FXqguBPuQxCiIw1iSmc"
+                  alt="24/7 Triage Desk"
+                />
+              </div>
+              <div className="p-4 flex flex-col items-center text-center -mt-6">
+                <div className="w-10 h-10 rounded-full bg-[#1745D8] text-white flex items-center justify-center shadow-md mb-2">
+                  <ShieldAlert className="w-5 h-5" />
                 </div>
-                <div className="p-3 grid grid-cols-12 items-center hover:bg-slate-50">
-                  <div className="col-span-2"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono font-bold">GET</span></div>
-                  <div className="col-span-5 font-mono text-slate-800">/api/risk-assessments/:assessmentId</div>
-                  <div className="col-span-5 text-slate-600">Retrieves specific assessment with clinical summary, factors, and audit hash.</div>
+                <h3 className="text-sm font-bold text-[#0E1C30]">24/7 Triage Desk</h3>
+                <p className="text-xs text-[#536078] mt-1 line-clamp-2">Direct escalation to on-call attending clinicians.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col bg-white rounded-2xl overflow-hidden shadow-2xs border border-[#DCE5F5] hover:shadow-md transition-all group">
+              <div className="h-32 w-full overflow-hidden bg-[#EDF3FF]">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIaNdR16gZFMt0jop21owr7MehazmYGu2FenMZC_nGNRK8C1l3vVNFcNh7DkZ5H1DuVWgL0ufdS6aeK4U53-8wgXF7sumAl_0Cg_f3oEHvEJDDXEKBrdFNdQ20T6mKbV06Q_e0H9WWb7NBmD68fqBOuwSmPOQJxFCLXhNOKPSEbiEttW2De4qv-8WAS3DbHJjIgEZnYyLm1vAjkkBzij8KTQOfWybaiTJAF-bGF6B1fBOCGu5qPKv-"
+                  alt="Tele-Radiology"
+                />
+              </div>
+              <div className="p-4 flex flex-col items-center text-center -mt-6">
+                <div className="w-10 h-10 rounded-full bg-[#004842] text-white flex items-center justify-center shadow-md mb-2">
+                  <Radio className="w-5 h-5" />
                 </div>
-                <div className="p-3 grid grid-cols-12 items-center hover:bg-slate-50">
-                  <div className="col-span-2"><span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-mono font-bold">POST</span></div>
-                  <div className="col-span-5 font-mono text-slate-800">/api/risk-assessments/:id/review</div>
-                  <div className="col-span-5 text-slate-600">Authorized clinician signs off, overrides risk score, or triggers formal escalation.</div>
+                <h3 className="text-sm font-bold text-[#0E1C30]">Tele-Radiology</h3>
+                <p className="text-xs text-[#536078] mt-1 line-clamp-2">Post-op imaging review and surgical evaluation.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col bg-white rounded-2xl overflow-hidden shadow-2xs border border-[#DCE5F5] hover:shadow-md transition-all group">
+              <div className="h-32 w-full overflow-hidden bg-[#EDF3FF]">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqD0sMKkA-Dbt3yFZEqigNdLVofJcVZv-hPzY1f1B32wYk-aiuEyysdviygCSXBrdQ6SEGtnWnS8z1K3kC-oJGd36tGwdhVjS3ZLoujpwux_r8fSgMLpSHWf5b1Ii_NBOcrLwJYS_tf8ON4m3jDFPDRQEy4kvrgHJHFfbYyNQz3EHl0ffm7xHGIW7I7VyAl0RRmwutiZR7LpLHzZkuDf0PoRWAcrsyNl0IVRU55AHGsAwWpxe845cx"
+                  alt="Lab Sync"
+                />
+              </div>
+              <div className="p-4 flex flex-col items-center text-center -mt-6">
+                <div className="w-10 h-10 rounded-full bg-[#465AA2] text-white flex items-center justify-center shadow-md mb-2">
+                  <Activity className="w-5 h-5" />
                 </div>
-                <div className="p-3 grid grid-cols-12 items-center hover:bg-slate-50">
-                  <div className="col-span-2"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono font-bold">GET</span></div>
-                  <div className="col-span-5 font-mono text-slate-800">/api/patients/:patientId/risk-assessments</div>
-                  <div className="col-span-5 text-slate-600">Lists historical risk assessments and trajectory for the patient.</div>
+                <h3 className="text-sm font-bold text-[#0E1C30]">Lab Sync</h3>
+                <p className="text-xs text-[#536078] mt-1 line-clamp-2">Automated blood biomarker trend tracking.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col bg-white rounded-2xl overflow-hidden shadow-2xs border border-[#DCE5F5] hover:shadow-md transition-all group">
+              <div className="h-32 w-full overflow-hidden bg-[#EDF3FF]">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4Gsu-RwnqvrxjCoHeaMNXxDJVVCbmXqGFq-w70S1pzBQnNGqEVWETxwjqJ5QL0YQE79n63TEsjelpqizK69dAlYFMYZ0WntXlFpCU4aeLp-i6UIrT84AAbBspF9cFq1Foa6q6oGMPqF6NeXcLXxXBzxq_UFZHyEzEV2L_eP_ZVUT97mJri9GfboxTj0goWEgnzeEsCX38VRVt82wBNAjvQR0NMFsGrWEmKvb2MGApkDCoRnt_nOBb"
+                  alt="Medication Track"
+                />
+              </div>
+              <div className="p-4 flex flex-col items-center text-center -mt-6">
+                <div className="w-10 h-10 rounded-full bg-[#1745D8] text-white flex items-center justify-center shadow-md mb-2">
+                  <Pill className="w-5 h-5" />
                 </div>
-                <div className="p-3 grid grid-cols-12 items-center hover:bg-slate-50">
-                  <div className="col-span-2"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono font-bold">GET</span></div>
-                  <div className="col-span-5 font-mono text-slate-800">/api/risk-assessments/openapi</div>
-                  <div className="col-span-5 text-slate-600">Returns live OpenAPI 3.0 JSON specification.</div>
-                </div>
+                <h3 className="text-sm font-bold text-[#0E1C30]">Medication Track</h3>
+                <p className="text-xs text-[#536078] mt-1 line-clamp-2">Dosage verification & pharmacy refill routing.</p>
               </div>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      </section>
 
-      {/* Mandatory Safety Notice Footer */}
-      <footer className="border-t border-slate-200 bg-white py-4 px-4 sm:px-6 lg:px-8 mt-auto">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>
-              <strong>Clinical Decision Support Prototype:</strong> Not an autonomous medical diagnostic device. Final medical orders require review by a licensed clinician.
+      {/* 5. VIRTUAL RECOVERY INFRASTRUCTURE (Dark Section from Design) */}
+      <section className="w-full py-16 bg-[#0E1C30] text-[#ECF0FF] relative overflow-hidden">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="mb-8 max-w-2xl">
+            <span className="text-[11px] font-semibold text-[#89F5E7] uppercase tracking-wider">
+              Tele-Coordination Infrastructure
             </span>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mt-1">
+              High-Fidelity Virtual Recovery Infrastructure
+            </h2>
+            <p className="text-sm text-[#CDDAF7] mt-2">
+              Hospital-grade monitoring suites and encrypted data channels supporting safe early discharges.
+            </p>
           </div>
-          <div className="font-mono text-[11px] text-slate-400">
-            Tele-Follow-Up Orchestrator • Member 2 (Phase 2)
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="bg-[#243146]/80 hover:bg-[#243146] rounded-xl overflow-hidden transition-all shadow-md group">
+              <div className="h-36 overflow-hidden">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJWE5ymcqgNEmyDlODkyPrIb-erafxFACU1uxUIcXatjboYhyExBzu1so84Fg5kFAh7U0udRPcgEKJ7GuM05u-AMKxAGHCAr0E3zi3GaIdmwKe9Fi9nYvV9NlQ0BhHbKFXDJRg46PGg0EIX-dGY2KlPe99wvpKwHqB360reezYO66SrOWrcyrcI941uyGMryp65zgffH-t8iWLWrfiliZyCmsFc4DE-My97WsS9XvH7RtjSjv055xu"
+                  alt="ICU Telemetry"
+                />
+              </div>
+              <div className="p-4 text-center">
+                <span className="text-sm font-semibold text-white block">Digital ICU Telemetry</span>
+                <span className="text-xs text-[#CDDAF7] mt-0.5 block">Continuous Stream</span>
+              </div>
+            </div>
+
+            <div className="bg-[#243146]/80 hover:bg-[#243146] rounded-xl overflow-hidden transition-all shadow-md group">
+              <div className="h-36 overflow-hidden">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCOTl2DMZv7zxG4akEAyAKDXA83TXb_1GbZn18pVbx0Fui7U6xGeGm4yEhN72jLSsrz9vzERjP57oLziNWjqkBuV3IMAaQCgjv3vnO_ZpjgfoVSx5ufbNciVmKiH4v7S8QMunNaFdss8HsXtgy-lz0S3POSz3bAUznvukc3gOQArHOoJ9bUUGuGoit290fqVVFKlvWjVF-y0bku2Gjsfi6kGTpAMnPzQksbZh_6_9-ynZ5kt-SbVS3R"
+                  alt="VIP Virtual Suites"
+                />
+              </div>
+              <div className="p-4 text-center">
+                <span className="text-sm font-semibold text-white block">VIP Virtual Suites</span>
+                <span className="text-xs text-[#CDDAF7] mt-0.5 block">Private Concierge</span>
+              </div>
+            </div>
+
+            <div className="bg-[#243146]/80 hover:bg-[#243146] rounded-xl overflow-hidden transition-all shadow-md group">
+              <div className="h-36 overflow-hidden">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWvyN6HuCCxYiEwAqR1h0Tq5_bRLknQD_8DnxZEjC_DF9Kb9m-4KquSVFu3IdnSMNBBITfQ3sUrzdQQNB5esgprKLmuzUtKn4PqCG1MlIZXBw2w7cQ9GpRjhqpmiPDDc2g88omgLo3Y8lvX6uF4Dc3tmRvZRddAavop9J1GR2pwL4GIejgycKycQcN4SvWMupyCUd9bmxD2b3d5zQNlvUGPava60-ERUDo-C1X6TPAgK8okS_WDKtb"
+                  alt="Surgical Observation"
+                />
+              </div>
+              <div className="p-4 text-center">
+                <span className="text-sm font-semibold text-white block">Surgical Observation</span>
+                <span className="text-xs text-[#CDDAF7] mt-0.5 block">Post-Op Wound Feed</span>
+              </div>
+            </div>
+
+            <div className="bg-[#243146]/80 hover:bg-[#243146] rounded-xl overflow-hidden transition-all shadow-md group">
+              <div className="h-36 overflow-hidden">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBAOrVXNoE2f_ob6228hwuVY95J4V1CsQP5YTKNPhPWQEFWZ2wZh6S4F-1rEPle6OcenD0Ey9ICXUuouT707NI7QsQWuxA_NeMlZKJT2GXhIKQ_SnUFDlAS3iz4zqeCdKJun40dBeBX-XXxuWEjQD0lFRaWxNBNh0cWlo8W8A64KGOuxiZFuIbE4oedfj0MxxByCVLJoQuIgQYoxHmKlGWYDbPCH4YGjdnKLceH7SxiE7NlvSJIpF30"
+                  alt="EHR Data Interop"
+                />
+              </div>
+              <div className="p-4 text-center">
+                <span className="text-sm font-semibold text-white block">EHR Data Interop</span>
+                <span className="text-xs text-[#CDDAF7] mt-0.5 block">FHIR & HL7 Certified</span>
+              </div>
+            </div>
+
+            <div className="bg-[#243146]/80 hover:bg-[#243146] rounded-xl overflow-hidden transition-all shadow-md group">
+              <div className="h-36 overflow-hidden">
+                <img
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8XHZqF8HnCoYh5lNwyUpGPssWtW2dlFHb0S51SsI2Fi9mXZpi27QiMkwnkUiXOHawsOqDAYMVvvU44eRpGK8HUVAZnVpJxoM4N6MXZB0isjxidZ0qjXGLtBLiSWYMrd2AoTmPjgGKhpjMpJKAY7cRAFt6sZUv6a85i22p5Y9mrMnNyaWBl9H5Usp2VpvEi1l87pSYWKb8TDJXOHd5O0QtXoy_gIsuhDZYDnZd8odT3knOZ5pVbbE2"
+                  alt="Rapid Transit"
+                />
+              </div>
+              <div className="p-4 text-center">
+                <span className="text-sm font-semibold text-white block">24/7 Rapid Transit</span>
+                <span className="text-xs text-[#CDDAF7] mt-0.5 block">Instant Dispatch</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. CLOSING CALL TO ACTION BANNER (Matching Reference) */}
+      <section className="w-full py-12">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="rounded-3xl bg-[#1745D8] text-white p-8 sm:p-12 shadow-2xl relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8">
+            <div className="flex flex-col gap-3 max-w-xl z-10">
+              <span className="text-[11px] font-semibold text-[#89F5E7] uppercase tracking-wider">
+                Hospital & Clinical Partners
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-white leading-tight">
+                Ready to Transform Your Post-Op Recovery Care?
+              </h2>
+              <p className="text-sm text-[#C0CAFF]">
+                Connect your clinical teams, reduce preventable 30-day readmissions, and deliver seamless outpatient reassurance.
+              </p>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 backdrop-blur text-white text-xs">
+                  <ShieldCheck className="w-4 h-4 text-[#89F5E7]" />
+                  <span>HIPAA & SOC-2 Certified</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 backdrop-blur text-white text-xs">
+                  <Activity className="w-4 h-4 text-[#89F5E7]" />
+                  <span>FHIR / EHR Interop Ready</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right White Card */}
+            <div className="bg-white text-[#0E1C30] rounded-2xl p-6 shadow-xl w-full lg:w-[380px] shrink-0 z-10 flex flex-col items-center text-center">
+              <div className="w-12 h-12 rounded-full bg-[#EDF3FF] flex items-center justify-center text-[#1745D8] mb-2">
+                <PhoneCall className="w-6 h-6" />
+              </div>
+              <span className="text-xs text-[#536078] font-medium">Care Coordination Central</span>
+              <span className="text-2xl font-bold text-[#1745D8] tracking-tight mt-0.5">(021) 1234-5678</span>
+              <span className="text-[10px] text-[#0D9488] font-semibold uppercase mt-1">Direct Clinical Routing Active</span>
+              <div className="w-full h-px bg-[#DCE5F5] my-4"></div>
+              <Link
+                href="/follow-ups/my-appointments"
+                className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#1745D8] text-white font-semibold text-sm hover:bg-[#1238B5] transition-all shadow-sm"
+              >
+                <span>Access Follow-Up Portal</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. FOOTER WITH EMERGENCY CLINICAL NOTICE */}
+      <footer className="w-full bg-[#F0F3FF] border-t border-[#DCE5F5] pt-12 pb-8">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          {/* Emergency Notice Banner */}
+          <div className="bg-[#FFDAD6]/60 border border-[#FFDAD6] rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[#93000A]">
+              <ShieldAlert className="w-5 h-5 shrink-0" />
+              <span className="text-sm font-bold">Emergency Notice: Immediate Clinical Assistance</span>
+            </div>
+            <p className="text-xs text-[#536078] max-w-2xl">
+              This portal is for scheduled post-operative care and follow-up monitoring. If you are experiencing chest pain, acute respiratory distress, or severe hemorrhage, call emergency services immediately.
+            </p>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-4 border-t border-[#DCE5F5] text-xs text-[#536078]">
+            <span>© 2026 Tele-Follow-Up Orchestrator Systems Inc. All clinical and telemetry rights reserved.</span>
+            <div className="flex items-center gap-4">
+              <span className="hover:text-[#0E1C30] cursor-pointer">Privacy Policy</span>
+              <span className="hover:text-[#0E1C30] cursor-pointer">Terms of Clinical Service</span>
+              <span className="hover:text-[#0E1C30] cursor-pointer">HIPAA Attestation</span>
+            </div>
           </div>
         </div>
       </footer>
-
-      {/* Clinician Review Modal */}
-      {currentAssessment && (
-        <ClinicianReviewDialog
-          assessment={currentAssessment}
-          isOpen={isReviewOpen}
-          onClose={() => setIsReviewOpen(false)}
-          onReviewSubmitted={handleReviewSubmitted}
-        />
-      )}
     </div>
   );
 }

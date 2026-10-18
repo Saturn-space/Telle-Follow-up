@@ -61,10 +61,10 @@ export default function ProviderCard({
   return (
     <div
       onClick={() => onSelect(facility)}
-      className={`bg-white rounded-xl border p-5 transition-all cursor-pointer shadow-sm hover:shadow-md ${
+      className={`bg-white rounded-2xl border p-5 transition-all cursor-pointer shadow-xs hover:shadow-md ${
         isSelected
-          ? 'border-teal-600 ring-2 ring-teal-500/20 bg-teal-50/20'
-          : 'border-slate-200 hover:border-slate-300'
+          ? 'border-[#1745D8] ring-2 ring-[#1745D8]/20 bg-[#F0F3FF]/50'
+          : 'border-[#DCE5F5] hover:border-[#1745D8]'
       }`}
     >
       {/* Header Badges */}
@@ -209,11 +209,11 @@ export default function ProviderCard({
                 e.stopPropagation();
                 onForwardToTravel(facility);
               }}
-              title="Forward coordinates to Member 4 Travel Optimizer"
+              title="Forward coordinates to Travel Optimizer"
               className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors flex items-center gap-1"
             >
               <Compass className="w-3 h-3 text-amber-600" />
-              Send to M4 Travel
+              Send to Travel
             </button>
           )}
 

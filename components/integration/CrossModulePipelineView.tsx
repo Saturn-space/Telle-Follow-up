@@ -47,13 +47,13 @@ export const CrossModulePipelineView: React.FC<CrossModulePipelineViewProps> = (
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Activity className="w-5 h-5 text-teal-600" />
-              <span>Five-Member Architectural Integration Pipeline</span>
+              <span>End-to-End Orchestration Pipeline</span>
               <span className="text-[10px] font-semibold bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-200">
-                Phase 4 Release Demo
+                System Verified
               </span>
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Complete data orchestration linking M1 (Registration & Recovery), M2 (AI Risk), M3 (Local Directory), M4 (Travel Engine), and M5 (Follow-Up & Teleconsultation).
+              Complete data orchestration linking Patient Intake & Recovery, AI Risk Stratification, Healthcare Directory, Travel Optimization, and Care Coordination & Teleconsultation.
             </p>
           </div>
 
@@ -118,13 +118,13 @@ export const CrossModulePipelineView: React.FC<CrossModulePipelineViewProps> = (
 
       {/* Stepper Pipeline Flow */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-        {/* Step 1: Member 1 */}
+        {/* Step 1: Intake */}
         <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">Step 1</span>
               <span className="text-[10px] bg-slate-100 font-mono text-slate-600 px-1.5 py-0.5 rounded">
-                Member 1
+                Intake
               </span>
             </div>
             <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
@@ -143,7 +143,7 @@ export const CrossModulePipelineView: React.FC<CrossModulePipelineViewProps> = (
           </div>
         </div>
 
-        {/* Step 2: Member 2 */}
+        {/* Step 2: Risk Stratification */}
         <div className={`rounded-xl p-4 border shadow-xs flex flex-col justify-between ${
           isHighRisk ? 'bg-red-50/50 border-red-200' : 'bg-white border-slate-200'
         }`}>
@@ -151,7 +151,7 @@ export const CrossModulePipelineView: React.FC<CrossModulePipelineViewProps> = (
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">Step 2</span>
               <span className="text-[10px] bg-slate-100 font-mono text-slate-600 px-1.5 py-0.5 rounded">
-                Member 2
+                Risk Engine
               </span>
             </div>
             <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
@@ -187,13 +187,13 @@ export const CrossModulePipelineView: React.FC<CrossModulePipelineViewProps> = (
           </div>
         </div>
 
-        {/* Step 3: Member 3 */}
+        {/* Step 3: Directory */}
         <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">Step 3</span>
               <span className="text-[10px] bg-slate-100 font-mono text-slate-600 px-1.5 py-0.5 rounded">
-                Member 3
+                Directory
               </span>
             </div>
             <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
@@ -212,7 +212,7 @@ export const CrossModulePipelineView: React.FC<CrossModulePipelineViewProps> = (
           </div>
         </div>
 
-        {/* Step 4: Member 4 */}
+        {/* Step 4: Travel Engine */}
         <div className={`rounded-xl p-4 border shadow-xs flex flex-col justify-between ${
           isEscalated ? 'bg-red-50/50 border-red-200' : 'bg-white border-slate-200'
         }`}>
@@ -220,7 +220,7 @@ export const CrossModulePipelineView: React.FC<CrossModulePipelineViewProps> = (
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">Step 4</span>
               <span className="text-[10px] bg-slate-100 font-mono text-slate-600 px-1.5 py-0.5 rounded">
-                Member 4
+                Travel Engine
               </span>
             </div>
             <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
@@ -253,13 +253,13 @@ export const CrossModulePipelineView: React.FC<CrossModulePipelineViewProps> = (
           </div>
         </div>
 
-        {/* Step 5: Member 5 */}
+        {/* Step 5: Coordination */}
         <div className="bg-teal-50/40 rounded-xl p-4 border border-teal-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-teal-700 uppercase tracking-wider">Step 5</span>
               <span className="text-[10px] bg-teal-100 font-mono text-teal-800 px-1.5 py-0.5 rounded">
-                Member 5
+                Coordination
               </span>
             </div>
             <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
