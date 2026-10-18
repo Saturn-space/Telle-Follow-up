@@ -7,9 +7,10 @@ import { RiskAssessmentResult, RiskLevel } from '@/lib/risk/types';
 interface Props {
   assessment: RiskAssessmentResult;
   onOpenReview: () => void;
+  canReview?: boolean;
 }
 
-export function RiskStatusBanner({ assessment, onOpenReview }: Props) {
+export function RiskStatusBanner({ assessment, onOpenReview, canReview = true }: Props) {
   const { riskLevel, heuristicScore, requiresInPerson, isEscalated, escalationReason, reviewStatus, latestReview } = assessment;
 
   const getRiskStyles = (level: RiskLevel) => {
@@ -80,12 +81,12 @@ export function RiskStatusBanner({ assessment, onOpenReview }: Props) {
               </div>
             </div>
           </div>
-          <button
+          {canReview && <button
             onClick={onOpenReview}
             className="shrink-0 px-4 py-2 bg-white text-rose-800 font-semibold rounded-lg hover:bg-rose-50 text-sm shadow transition"
           >
             Clinician Action / Override
-          </button>
+          </button>}
         </div>
       )}
 
@@ -131,13 +132,13 @@ export function RiskStatusBanner({ assessment, onOpenReview }: Props) {
                 </p>
               )}
             </div>
-            <button
+            {canReview && <button
               onClick={onOpenReview}
               className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-lg shadow-sm transition flex items-center gap-1.5"
             >
               <Stethoscope className="w-3.5 h-3.5" />
               Review / Sign-Off
-            </button>
+            </button>}
           </div>
         </div>
 

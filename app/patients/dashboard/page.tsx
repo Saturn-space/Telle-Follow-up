@@ -5,10 +5,9 @@
 // Clinical Sanctuary Design System based on DESIGN.md
 // ============================================================================
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { store } from '@/lib/server/store';
 import {
   Activity,
   Calendar,
@@ -25,11 +24,33 @@ import {
 } from 'lucide-react';
 
 export default function PatientDashboardPage() {
-  const { user } = useAuth();
-  const patientId = user?.role === 'PATIENT' ? user.id : 'pat-101';
-  const patient = store.getPatient(patientId) || store.getPatient('pat-101');
-  const plans = store.getAllPlans(patient?.id || 'pat-101');
-  const appointments = store.getAppointmentsByPatient(patient?.id || 'pat-101');
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const [care, setCare] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (isAuthLoading) return () => { active = false; };
+    if (!user?.patientId) return () => { active = false; };
+    fetch(`/api/integration/cross-module?patientId=${encodeURIComponent(user.patientId)}`, { cache: 'no-store' })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error?.message || 'Patient care information is unavailable.');
+        if (active) setCare(result.data);
+      })
+      .catch((error) => { if (active) setLoadError(error instanceof Error ? error.message : 'Patient care information is unavailable.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [user?.patientId, isAuthLoading]);
+
+  const patient = care?.activePatient;
+  const plans = care?.member5_orchestration?.plans || [];
+  const appointments: any[] = care?.member5_orchestration?.appointments || [];
+
+  if (isAuthLoading || (Boolean(user?.patientId) && loading)) return <div className="p-8 text-sm text-[#536078]">Loading your saved care plan…</div>;
+  if (!user?.patientId) return <div className="m-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">A patient profile is not linked to this account.</div>;
+  if (loadError) return <div className="m-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">{loadError}</div>;
 
   return (
     <div className="p-6 md:p-8 max-w-[1440px] mx-auto space-y-6">
@@ -45,19 +66,18 @@ export default function PatientDashboardPage() {
             Welcome back, {patient?.name || 'Patient'}
           </h1>
           <p className="text-sm text-[#C0CAFF] mt-2 leading-relaxed">
-            Recovery procedure: <strong className="text-white font-semibold">{patient?.surgeryProcedure}</strong> at {patient?.operatingHospital}.
-            Your attending surgical team has active telemetry monitoring enabled.
+            Recovery procedure: <strong className="text-white font-semibold">{patient?.surgeryProcedure || 'Not recorded'}</strong> at {patient?.operatingHospital || 'hospital not recorded'}.
           </p>
 
           <div className="flex flex-wrap items-center gap-4 mt-6 pt-4 border-t border-white/20 text-xs">
             <div className="flex items-center gap-1.5 text-[#EDF3FF]">
               <Clock className="w-4 h-4 text-[#89F5E7]" />
-              <span>Discharged: <strong className="text-white">{patient?.dischargeDate ? new Date(patient.dischargeDate).toLocaleDateString() : 'Recent'}</strong></span>
+              <span>Discharged: <strong className="text-white">{patient?.dischargeDate ? new Date(patient.dischargeDate).toLocaleDateString() : 'Not recorded'}</strong></span>
             </div>
             <span className="w-1 h-1 rounded-full bg-white/40"></span>
             <div className="flex items-center gap-1.5 text-[#EDF3FF]">
               <MapPin className="w-4 h-4 text-[#89F5E7]" />
-              <span>Home Region: <strong className="text-white">{patient?.homeCity || 'Springfield'}</strong></span>
+              <span>Home Region: <strong className="text-white">{patient?.homeCity || 'Not recorded'}</strong></span>
             </div>
           </div>
         </div>
@@ -77,7 +97,7 @@ export default function PatientDashboardPage() {
               Daily Recovery Log
             </h2>
             <p className="text-xs text-[#536078] mt-1.5 leading-relaxed">
-              Record biometric vitals, pain level score, and surgical wound status for AI CDS risk monitoring.
+              Record recovery information for review by your care team.
             </p>
           </div>
           <div className="flex items-center gap-1 text-xs font-semibold text-[#1745D8] mt-4 pt-3 border-t border-[#F0F3FF]">
@@ -119,7 +139,7 @@ export default function PatientDashboardPage() {
               Nearby Verified Clinics
             </h2>
             <p className="text-xs text-[#536078] mt-1.5 leading-relaxed">
-              Find accredited local facilities in {patient?.homeCity || 'your city'} for dressing changes and suture care.
+              Find listed local facilities in {patient?.homeCity || 'your city'} for follow-up care.
             </p>
           </div>
           <div className="flex items-center gap-1 text-xs font-semibold text-[#1745D8] mt-4 pt-3 border-t border-[#F0F3FF]">
@@ -194,7 +214,7 @@ export default function PatientDashboardPage() {
                     </span>
                     {appt.type === 'TELECONSULTATION' && (
                       <Link
-                        href={`/?tab=teleconsult`}
+                        href="/follow-ups/my-appointments"
                         className="px-3 py-1 rounded-lg bg-[#1745D8] text-white font-medium text-xs hover:bg-[#1238B5] transition shadow-2xs"
                       >
                         Launch Room

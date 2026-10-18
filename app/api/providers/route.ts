@@ -1,297 +1,148 @@
-// ============================================================================
-// API ROUTE: /api/providers (HARDENED - PHASE 3)
-// GET: Search, filter, and paginate healthcare providers with strict validation
-// POST: Register a new facility (Strict Role Check: COORDINATOR or ADMIN)
-// ============================================================================
-
 import { NextRequest, NextResponse } from 'next/server';
-import { providerRepository } from '@/lib/db/provider-repository';
-import {
-  FacilityType,
-  ServiceCategory,
-  VerificationStatus,
-} from '@/lib/types/provider';
+import { z } from 'zod';
+import { FacilityType, ProviderDataSource, ServiceCategory, VerificationStatus } from '@/generated/prisma';
+import { prisma } from '@/lib/prisma';
+import { calculateHaversineDistanceKm } from '@/lib/travel/routing-adapter';
+import { getVerifiedAuthContext } from '@/lib/server/auth-guard';
+import { AccessError, requireRoles } from '@/lib/server/db-access';
 
-const VALID_FACILITY_TYPES: FacilityType[] = [
-  'HOSPITAL',
-  'CLINIC',
-  'DIAGNOSTIC_CENTER',
-  'WOUND_CARE_CENTER',
-  'SURGICAL_REHAB',
-];
+export const runtime = 'nodejs';
 
-const VALID_SERVICES: ServiceCategory[] = [
-  'WOUND_CARE',
-  'SUTURE_REMOVAL',
-  'DRAIN_MANAGEMENT',
-  'POST_OP_LABS',
-  'IMAGING_XRAY',
-  'PHYSIOTHERAPY',
-  'GENERAL_POST_OP_EVAL',
-];
+const facilityInputSchema = z.object({
+  name: z.string().trim().min(2).max(200),
+  facilityType: z.nativeEnum(FacilityType).default(FacilityType.CLINIC),
+  addressLine1: z.string().trim().min(3).max(200),
+  addressLine2: z.string().trim().max(200).optional(),
+  city: z.string().trim().min(1).max(100),
+  state: z.string().trim().min(1).max(100),
+  postalCode: z.string().trim().min(3).max(20),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  phone: z.string().trim().max(32).optional(),
+  email: z.string().trim().email().optional(),
+  websiteUrl: z.string().trim().url().optional(),
+  services: z.array(z.object({
+    serviceCategory: z.nativeEnum(ServiceCategory),
+    specialtyName: z.string().trim().min(2).max(160),
+    description: z.string().trim().max(1000).optional(),
+    estimatedCostINR: z.number().nonnegative().max(10_000_000).optional(),
+  })).max(30).default([]),
+});
 
-const VALID_VERIFICATION_STATUSES: VerificationStatus[] = [
-  'VERIFIED',
-  'UNVERIFIED',
-  'PENDING_REVIEW',
-  'SEEDED_DEMO',
-];
+function errorResponse(error: unknown) {
+  if (error instanceof AccessError) {
+    return NextResponse.json({ success: false, error: { code: error.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', message: error.message } }, { status: error.status });
+  }
+  return null;
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    const params = new URL(request.url).searchParams;
+    const query = (params.get('searchTerm') || params.get('q') || '').trim();
+    if (query.length > 150) return NextResponse.json({ success: false, error: { code: 'INVALID_PARAMETER', message: 'Search text must be 150 characters or fewer.' } }, { status: 400 });
 
-    // 1. Sanitize & clamp search term (prevent regex injection / DOS)
-    const rawSearchTerm = searchParams.get('searchTerm') || searchParams.get('q') || undefined;
-    let searchTerm: string | undefined = undefined;
-    if (rawSearchTerm) {
-      if (rawSearchTerm.length > 150) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'INVALID_PARAMETER',
-              message: 'Search query exceeds maximum allowed length of 150 characters.',
-            },
-          },
-          { status: 400 }
-        );
-      }
-      searchTerm = rawSearchTerm.trim();
+    const page = Math.max(1, Number(params.get('page') || 1) || 1);
+    const limit = Math.min(50, Math.max(1, Number(params.get('limit') || 10) || 10));
+    const lat = params.has('latitude') ? Number(params.get('latitude')) : params.has('lat') ? Number(params.get('lat')) : undefined;
+    const lng = params.has('longitude') ? Number(params.get('longitude')) : params.has('lng') ? Number(params.get('lng')) : undefined;
+    const radius = Number(params.get('radiusKm') || params.get('radius') || 500);
+    if ((lat !== undefined && (!Number.isFinite(lat) || lat < -90 || lat > 90)) || (lng !== undefined && (!Number.isFinite(lng) || lng < -180 || lng > 180))) {
+      return NextResponse.json({ success: false, error: { code: 'INVALID_COORDINATES', message: 'Latitude or longitude is outside its valid range.' } }, { status: 400 });
     }
+    if (!Number.isFinite(radius) || radius <= 0 || radius > 500) return NextResponse.json({ success: false, error: { code: 'INVALID_RADIUS', message: 'Radius must be between 1 and 500 km.' } }, { status: 400 });
 
-    // 2. City & State validation
-    const city = searchParams.get('city')?.trim() || undefined;
-    const state = searchParams.get('state')?.trim() || undefined;
-    const postalCode = searchParams.get('postalCode')?.trim() || undefined;
+    const serviceValues = (params.get('services') || '').split(',').filter(Boolean).map((v) => v.toUpperCase());
+    const facilityValues = (params.get('facilityType') || '').split(',').filter(Boolean).map((v) => v.toUpperCase());
+    const services = serviceValues.filter((v): v is ServiceCategory => Object.values(ServiceCategory).includes(v as ServiceCategory));
+    const facilityTypes = facilityValues.filter((v): v is FacilityType => Object.values(FacilityType).includes(v as FacilityType));
+    const statusParam = params.get('verificationStatus');
+    const verificationStatus = statusParam && Object.values(VerificationStatus).includes(statusParam.toUpperCase() as VerificationStatus)
+      ? statusParam.toUpperCase() as VerificationStatus
+      : VerificationStatus.VERIFIED;
 
-    // 3. Coordinate validation
-    const latParam = searchParams.get('latitude') || searchParams.get('lat');
-    const lngParam = searchParams.get('longitude') || searchParams.get('lng');
-    const radiusParam = searchParams.get('radiusKm') || searchParams.get('radius');
-
-    let latitude: number | undefined = undefined;
-    let longitude: number | undefined = undefined;
-    let radiusKm: number | undefined = undefined;
-
-    if (latParam !== null) {
-      latitude = parseFloat(latParam);
-      if (isNaN(latitude) || latitude < -90 || latitude > 90) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'INVALID_COORDINATES',
-              message: 'Latitude must be a valid number between -90 and 90.',
-            },
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (lngParam !== null) {
-      longitude = parseFloat(lngParam);
-      if (isNaN(longitude) || longitude < -180 || longitude > 180) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'INVALID_COORDINATES',
-              message: 'Longitude must be a valid number between -180 and 180.',
-            },
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (radiusParam !== null) {
-      radiusKm = parseFloat(radiusParam);
-      if (isNaN(radiusKm) || radiusKm <= 0 || radiusKm > 500) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'INVALID_RADIUS',
-              message: 'radiusKm must be a positive number between 1 and 500 km.',
-            },
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    // 4. Validate & filter ServiceCategory enums
-    const servicesParam = searchParams.get('services');
-    let services: ServiceCategory[] | undefined = undefined;
-    if (servicesParam) {
-      const parsed = servicesParam
-        .split(',')
-        .map((s) => s.trim().toUpperCase())
-        .filter((s): s is ServiceCategory => VALID_SERVICES.includes(s as ServiceCategory));
-      if (parsed.length > 0) services = parsed;
-    }
-
-    // 5. Validate FacilityType enums
-    const facilityTypeParam = searchParams.get('facilityType');
-    let facilityType: FacilityType[] | undefined = undefined;
-    if (facilityTypeParam) {
-      const parsed = facilityTypeParam
-        .split(',')
-        .map((f) => f.trim().toUpperCase())
-        .filter((f): f is FacilityType => VALID_FACILITY_TYPES.includes(f as FacilityType));
-      if (parsed.length > 0) facilityType = parsed;
-    }
-
-    // 6. Verification status filter
-    const statusParam = searchParams.get('verificationStatus');
-    let verificationStatus: VerificationStatus | undefined = undefined;
-    if (statusParam) {
-      const upper = statusParam.toUpperCase() as VerificationStatus;
-      if (VALID_VERIFICATION_STATUSES.includes(upper)) {
-        verificationStatus = upper;
-      }
-    }
-
-    const emergencyOnly = searchParams.get('emergencyOnly') === 'true';
-
-    // 7. Pagination bounds
-    const pageParam = searchParams.get('page');
-    const limitParam = searchParams.get('limit');
-    const page = pageParam ? Math.max(1, parseInt(pageParam, 10) || 1) : 1;
-    const limit = limitParam ? Math.min(50, Math.max(1, parseInt(limitParam, 10) || 10)) : 10;
-    const sortBy = (searchParams.get('sortBy') as 'distance' | 'name' | 'type') || 'distance';
-
-    const result = providerRepository.searchFacilities({
-      searchTerm,
-      city,
-      state,
-      postalCode,
-      latitude,
-      longitude,
-      radiusKm,
-      services,
-      facilityType,
+    const where = {
+      isActive: true,
       verificationStatus,
-      emergencyOnly,
-      page,
-      limit,
-      sortBy,
-    });
+      emergencyCapable: params.get('emergencyOnly') === 'true' ? true : undefined,
+      city: params.get('city')?.trim() ? { contains: params.get('city')!.trim(), mode: 'insensitive' as const } : undefined,
+      state: params.get('state')?.trim() ? { contains: params.get('state')!.trim(), mode: 'insensitive' as const } : undefined,
+      postalCode: params.get('postalCode')?.trim() ? { contains: params.get('postalCode')!.trim() } : undefined,
+      facilityType: facilityTypes.length ? { in: facilityTypes } : undefined,
+      services: services.length ? { some: { serviceCategory: { in: services } } } : undefined,
+      OR: query ? [
+        { name: { contains: query, mode: 'insensitive' as const } },
+        { city: { contains: query, mode: 'insensitive' as const } },
+        { state: { contains: query, mode: 'insensitive' as const } },
+        { addressLine1: { contains: query, mode: 'insensitive' as const } },
+      ] : undefined,
+    };
 
+    const [rows, total] = await prisma.$transaction([
+      prisma.healthcareFacility.findMany({
+        where,
+        include: { services: true, verifications: { orderBy: { verifiedAt: 'desc' }, take: 1 } },
+        orderBy: params.get('sortBy') === 'name' ? { name: 'asc' } : { updatedAt: 'desc' },
+        take: 1000,
+      }),
+      prisma.healthcareFacility.count({ where }),
+    ]);
+
+    let results = rows.map((facility) => ({
+      ...facility,
+      distanceKm: lat !== undefined && lng !== undefined && facility.latitude !== null && facility.longitude !== null
+        ? calculateHaversineDistanceKm(lat, lng, facility.latitude, facility.longitude)
+        : undefined,
+    }));
+    if (lat !== undefined && lng !== undefined) results = results.filter((facility) => facility.distanceKm !== undefined && facility.distanceKm <= radius);
+    if (params.get('sortBy') === 'distance' && lat !== undefined && lng !== undefined) results.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+
+    const count = results.length;
+    const data = results.slice((page - 1) * limit, page * limit);
     return NextResponse.json({
       success: true,
-      data: result.data,
-      meta: result.meta,
+      data,
+      meta: { total: lat !== undefined && lng !== undefined ? count : total, page, limit, totalPages: Math.ceil((lat !== undefined && lng !== undefined ? count : total) / limit), source: 'POSTGRESQL', emptyReason: count === 0 ? 'No verified provider records match this search.' : undefined },
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown internal error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'DIRECTORY_SEARCH_FAILED',
-          message: 'An error occurred while querying the healthcare directory.',
-          details: process.env.NODE_ENV === 'development' ? message : undefined,
-        },
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error('[providers] Search failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'DIRECTORY_UNAVAILABLE', message: 'Provider search is unavailable because the directory could not be loaded.' } }, { status: 503 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Strict Role-Based Authorization
-    const roleHeader = request.headers.get('x-user-role');
-    const isAuthorized = roleHeader === 'COORDINATOR' || roleHeader === 'ADMIN';
+    const context = await getVerifiedAuthContext(request);
+    requireRoles(context, ['COORDINATOR', 'ADMIN']);
+    const parsed = facilityInputSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Facility details are invalid.', details: parsed.error.flatten() } }, { status: 400 });
 
-    if (!isAuthorized) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FORBIDDEN',
-            message: 'Access denied: Only authorized clinical coordinators and administrators may register new healthcare facilities.',
-          },
-        },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
-
-    // Mandatory Field Validation
-    if (!body.name || typeof body.name !== 'string' || body.name.trim().length < 3) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Facility name must be a valid string of at least 3 characters.',
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!body.city || !body.state || !body.postalCode) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Address components (city, state, postalCode) are mandatory.',
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    const created = providerRepository.createFacility({
-      name: body.name.trim(),
-      facilityType: VALID_FACILITY_TYPES.includes(body.facilityType) ? body.facilityType : 'CLINIC',
-      addressLine1: body.addressLine1 || body.address || 'Address unlisted',
-      addressLine2: body.addressLine2,
-      city: body.city.trim(),
-      state: body.state.trim(),
-      postalCode: body.postalCode.trim(),
-      country: body.country || 'India',
-      latitude: body.latitude ? parseFloat(body.latitude) : undefined,
-      longitude: body.longitude ? parseFloat(body.longitude) : undefined,
-      phone: body.phone,
-      email: body.email,
-      websiteUrl: body.websiteUrl,
-      operatingHours: body.operatingHours,
-      emergencyCapable: !!body.emergencyCapable,
-      verificationStatus: 'PENDING_REVIEW', // New external submissions always begin as PENDING_REVIEW
-      dataSource: 'COMMUNITY_SUBMISSION',
-      services: body.services || [],
+    const input = parsed.data;
+    const facility = await prisma.healthcareFacility.create({
+      data: {
+        name: input.name,
+        facilityType: input.facilityType,
+        addressLine1: input.addressLine1,
+        addressLine2: input.addressLine2,
+        city: input.city,
+        state: input.state,
+        postalCode: input.postalCode,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        phone: input.phone,
+        email: input.email,
+        websiteUrl: input.websiteUrl,
+        verificationStatus: VerificationStatus.PENDING_REVIEW,
+        dataSource: ProviderDataSource.COMMUNITY_SUBMISSION,
+        services: { create: input.services },
+      },
+      include: { services: true },
     });
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: created,
-        meta: {
-          message: 'Facility successfully registered and queued for clinical verification review.',
-        },
-      },
-      { status: 201 }
-    );
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown internal error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'FACILITY_CREATION_FAILED',
-          message: 'Failed to create provider record.',
-          details: process.env.NODE_ENV === 'development' ? message : undefined,
-        },
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, data: facility }, { status: 201 });
+  } catch (error) {
+    const response = errorResponse(error);
+    if (response) return response;
+    console.error('[providers] Facility submission failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'FACILITY_SAVE_UNAVAILABLE', message: 'The facility submission could not be saved.' } }, { status: 503 });
   }
 }

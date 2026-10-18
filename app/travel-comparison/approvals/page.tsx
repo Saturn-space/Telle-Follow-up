@@ -18,12 +18,12 @@ export default function TravelApprovalsPage() {
             Travel Optimization &amp; Care Transfer Approvals
           </h1>
           <p className="text-sm text-[#C0CAFF] mt-2 max-w-2xl leading-relaxed">
-            Review transit costs, travel hours, and local provider alternatives for recovering patients. Confirms safety criteria before approving local care substitution.
+            Review estimated travel options for patients assigned to your account. A clinician must confirm clinical suitability before any care change.
           </p>
         </div>
       </div>
 
-      <TravelOptimizationDashboard initialPatientId="pt-101" />
+      <TravelOptimizationDashboard />
     </div>
   );
 }

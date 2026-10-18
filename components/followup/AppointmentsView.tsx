@@ -63,7 +63,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
     setEndTime(e.toISOString().slice(0, 16));
     setShowScheduleModal(true);
   };
-  const [locationOrService, setLocationOrService] = useState('Encrypted Video Suite');
+  const [locationOrService, setLocationOrService] = useState('External video meeting');
   const [clinicalNotes, setClinicalNotes] = useState('');
   const [cancellationReason, setCancellationReason] = useState('');
   const [newRescheduleStart, setNewRescheduleStart] = useState('');
@@ -404,7 +404,7 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({
                     const newType = e.target.value as typeof type;
                     setType(newType);
                     if (newType === 'TELECONSULTATION') {
-                      setLocationOrService('Encrypted Jitsi Teleconsultation Suite');
+                      setLocationOrService('External Jitsi meeting');
                     } else if (newType === 'LOCAL_CLINIC_VISIT') {
                       setLocationOrService('Local Neighborhood Outpatient Clinic');
                     } else if (newType === 'DIAGNOSTIC_LAB') {

@@ -469,7 +469,6 @@ export class FollowUpService {
 
   /**
    * Verify Razorpay payment signature server-side using timing-safe comparison.
-   * Updates associated appointment status to CONFIRMED upon successful signature verification.
    */
   static verifyPaymentSignature(params: {
     orderId: string;
@@ -478,7 +477,10 @@ export class FollowUpService {
     razorpaySignature: string;
   }): { success: boolean; error?: string; alreadyCaptured?: boolean; order?: PaymentOrder } {
     const isEnabled = process.env.PAYMENTS_ENABLED === 'true';
-    const secret = process.env.RAZORPAY_KEY_SECRET || 'placeholder_secret';
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!isEnabled || !secret) {
+      return { success: false, error: 'Payment verification is disabled or not configured.' };
+    }
 
     if (!params.razorpaySignature || typeof params.razorpaySignature !== 'string') {
       return { success: false, error: 'Payment signature missing or invalid format.' };
@@ -512,11 +514,6 @@ export class FollowUpService {
       isValid = false;
     }
 
-    // Sandbox test key fallback for automated testing environments
-    if (!isValid && !isEnabled && params.razorpaySignature === 'test_valid_signature') {
-      isValid = true;
-    }
-
     const now = new Date().toISOString();
 
     if (!isValid) {
@@ -536,16 +533,6 @@ export class FollowUpService {
     order.failureReason = undefined;
     order.updatedAt = now;
     store.savePaymentOrder(order);
-
-    // Update associated appointment to CONFIRMED transactionally
-    if (order.appointmentId) {
-      const appt = store.getAppointment(order.appointmentId);
-      if (appt && (appt.status === 'PROPOSED' || appt.status === 'SCHEDULED')) {
-        appt.status = 'CONFIRMED';
-        appt.updatedAt = now;
-        store.saveAppointment(appt);
-      }
-    }
 
     return { success: true, order };
   }

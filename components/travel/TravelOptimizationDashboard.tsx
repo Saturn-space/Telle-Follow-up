@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  ClinicalUrgencyLevel,
   DestinationComparisonOption,
   TransportMode,
   TravelComparisonResult,
@@ -19,7 +18,6 @@ import {
   CheckCircle,
   AlertCircle,
   ShieldAlert,
-  PlayCircle,
   FileCode,
 } from 'lucide-react';
 
@@ -36,10 +34,9 @@ const LeafletMapContainer = dynamic(() => import('./LeafletMapContainer'), {
 
 export default function TravelOptimizationDashboard({ initialPatientId }: { initialPatientId?: string } = {}) {
   const [patients, setPatients] = useState<any[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState<string>(initialPatientId || 'pt-101');
+  const [selectedPatientId, setSelectedPatientId] = useState<string>(initialPatientId || '');
   const [requiredService, setRequiredService] = useState<string>('POST_OP_WOUND_CARE');
   const [transportMode, setTransportMode] = useState<TransportMode>('DRIVING');
-  const [clinicalUrgency, setClinicalUrgency] = useState<ClinicalUrgencyLevel>('LOW');
   const [comparisonResult, setComparisonResult] = useState<TravelComparisonResult | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -47,24 +44,9 @@ export default function TravelOptimizationDashboard({ initialPatientId }: { init
   const [handoffToast, setHandoffToast] = useState<string | null>(null);
 
   const triggerComparison = useCallback(
-    async (
-      patientId: string,
-      originOverride?: any,
-      serviceOverride?: string,
-      modeOverride?: TransportMode,
-      urgencyOverride?: ClinicalUrgencyLevel
-    ) => {
+    async (patientId: string, serviceOverride?: string, modeOverride?: TransportMode) => {
       setIsLoading(true);
       setError(null);
-
-      const pt = patients.find((p) => p.patientId === patientId);
-      const origin = originOverride || pt?.origin || {
-        latitude: 26.9124,
-        longitude: 75.7873,
-        label: 'Jaipur, Rajasthan',
-        district: 'Jaipur',
-        state: 'Rajasthan',
-      };
 
       try {
         const res = await fetch('/api/travel/compare', {
@@ -72,10 +54,8 @@ export default function TravelOptimizationDashboard({ initialPatientId }: { init
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             patientId,
-            origin,
             requiredService: serviceOverride || requiredService,
             transportMode: modeOverride || transportMode,
-            simulateClinicalUrgency: urgencyOverride || clinicalUrgency,
           }),
         });
 
@@ -92,7 +72,7 @@ export default function TravelOptimizationDashboard({ initialPatientId }: { init
         setIsLoading(false);
       }
     },
-    [patients, requiredService, transportMode, clinicalUrgency]
+    [requiredService, transportMode]
   );
 
   // Fetch initial patient data once on mount
@@ -102,33 +82,28 @@ export default function TravelOptimizationDashboard({ initialPatientId }: { init
     async function initData() {
       try {
         const res = await fetch('/api/travel/patients');
-        if (res.ok && active) {
+        if (active) {
           const body = await res.json();
-          if (body.success && body.data.patients.length > 0) {
-            const defaultPt = body.data.patients[0];
-            setPatients(body.data.patients);
-            setSelectedPatientId(defaultPt.patientId);
-            setClinicalUrgency(defaultPt.clinicalRisk.urgencyLevel);
-
-            const compareRes = await fetch('/api/travel/compare', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                patientId: defaultPt.patientId,
-                origin: defaultPt.origin,
-                requiredService: 'POST_OP_WOUND_CARE',
-                transportMode: 'DRIVING',
-                simulateClinicalUrgency: defaultPt.clinicalRisk.urgencyLevel,
-              }),
-            });
-
-            if (compareRes.ok && active) {
+          if (!res.ok) throw new Error(body.error?.message || 'Patient travel context is unavailable.');
+          if (body.success && active) {
+            const patientOptions = body.data.patients || [];
+            setPatients(patientOptions);
+            const selected = patientOptions.find((patient: any) => patient.patientId === initialPatientId) || patientOptions[0];
+            if (selected) {
+              setSelectedPatientId(selected.patientId);
+              const compareRes = await fetch('/api/travel/compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ patientId: selected.patientId, requiredService: 'POST_OP_WOUND_CARE', transportMode: 'DRIVING' }) });
               const compareBody = await compareRes.json();
-              if (compareBody.success) {
+              if (compareBody.success && active) {
                 setComparisonResult(compareBody.data);
                 setSelectedCandidateId(compareBody.data.recommendedProviderId);
+              } else if (active) {
+                setError(compareBody.error?.message || 'Travel comparison is unavailable.');
               }
+            } else {
+              setError('No patient records are available for your account.');
             }
+          } else if (active) {
+            throw new Error(body.error?.message || 'Patient travel context is unavailable.');
           }
         }
       } catch (err: any) {
@@ -143,60 +118,22 @@ export default function TravelOptimizationDashboard({ initialPatientId }: { init
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialPatientId]);
 
   const handlePatientChange = (patientId: string) => {
     setSelectedPatientId(patientId);
-    const pt = patients.find((p) => p.patientId === patientId);
-    if (pt) {
-      setClinicalUrgency(pt.clinicalRisk.urgencyLevel);
-      triggerComparison(patientId, pt.origin, requiredService, transportMode, pt.clinicalRisk.urgencyLevel);
-    }
+    if (patientId) triggerComparison(patientId, requiredService, transportMode);
   };
 
   const handleRunComparison = () => {
-    const pt = patients.find((p) => p.patientId === selectedPatientId);
-    triggerComparison(selectedPatientId, pt?.origin, requiredService, transportMode, clinicalUrgency);
+    if (selectedPatientId) triggerComparison(selectedPatientId, requiredService, transportMode);
   };
 
   const handleProceedToFollowUpPlan = (option: DestinationComparisonOption) => {
     setHandoffToast(
-      `Coordinating Follow-Up Plan: Destination "${option.providerName}" (${option.route.distanceKm} km) queued for care coordination and scheduling.`
+      `${option.providerName} is selected for review. A clinician or coordinator must create the follow-up plan and confirm the appointment.`
     );
     setTimeout(() => setHandoffToast(null), 6000);
-  };
-
-  // Demonstration Presets
-  const applyScenarioPreset = (scenario: 'SAVINGS' | 'ESCALATION' | 'UNASSESSED' | 'MISMATCH') => {
-    if (scenario === 'SAVINGS') {
-      setSelectedPatientId('pt-101');
-      setRequiredService('POST_OP_WOUND_CARE');
-      setTransportMode('DRIVING');
-      setClinicalUrgency('LOW');
-      const pt = patients.find((p) => p.patientId === 'pt-101');
-      triggerComparison('pt-101', pt?.origin, 'POST_OP_WOUND_CARE', 'DRIVING', 'LOW');
-    } else if (scenario === 'ESCALATION') {
-      setSelectedPatientId('pt-103');
-      setRequiredService('POST_OP_WOUND_CARE');
-      setTransportMode('DRIVING');
-      setClinicalUrgency('CRITICAL');
-      const pt = patients.find((p) => p.patientId === 'pt-103');
-      triggerComparison('pt-103', pt?.origin, 'POST_OP_WOUND_CARE', 'DRIVING', 'CRITICAL');
-    } else if (scenario === 'UNASSESSED') {
-      setSelectedPatientId('pt-101');
-      setRequiredService('POST_OP_WOUND_CARE');
-      setTransportMode('DRIVING');
-      setClinicalUrgency('UNASSESSED_OR_MISSING');
-      const pt = patients.find((p) => p.patientId === 'pt-101');
-      triggerComparison('pt-101', pt?.origin, 'POST_OP_WOUND_CARE', 'DRIVING', 'UNASSESSED_OR_MISSING');
-    } else if (scenario === 'MISMATCH') {
-      setSelectedPatientId('pt-101');
-      setRequiredService('DRAIN_REMOVAL'); // Specialized drain removal
-      setTransportMode('DRIVING');
-      setClinicalUrgency('LOW');
-      const pt = patients.find((p) => p.patientId === 'pt-101');
-      triggerComparison('pt-101', pt?.origin, 'DRAIN_REMOVAL', 'DRIVING', 'LOW');
-    }
   };
 
   return (
@@ -224,63 +161,9 @@ export default function TravelOptimizationDashboard({ initialPatientId }: { init
           <div className="text-right hidden sm:block">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
             <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
-              Integrated & Verified
+              Database-backed estimates
             </span>
           </div>
-        </div>
-      </div>
-
-      {/* Demonstration Quick-Select Preset Bar */}
-      <div className="bg-slate-900 text-white rounded-xl p-4 shadow-sm border border-slate-800">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <PlayCircle className="w-5 h-5 text-teal-400" />
-            <div>
-              <span className="text-xs font-bold text-white uppercase tracking-wider">Evaluation & Demonstration Presets</span>
-              <p className="text-[11px] text-slate-400">1-click automated setup of the 4 core clinical demonstration scenarios</p>
-            </div>
-          </div>
-          <span className="text-[10px] text-teal-300 font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-            System Verified
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          <button
-            onClick={() => applyScenarioPreset('SAVINGS')}
-            disabled={isLoading}
-            className="text-left p-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-xs transition-colors"
-          >
-            <div className="font-bold text-teal-300 mb-0.5">Scenario 1: Stable Care Plan</div>
-            <div className="text-[10px] text-slate-400 leading-tight">Patient 101: 572 km round-trip saved via local clinic</div>
-          </button>
-
-          <button
-            onClick={() => applyScenarioPreset('ESCALATION')}
-            disabled={isLoading}
-            className="text-left p-2.5 rounded-lg bg-red-950/40 hover:bg-red-950/60 border border-red-800/60 text-xs transition-colors"
-          >
-            <div className="font-bold text-red-400 mb-0.5">Scenario 2: Emergency Takeover</div>
-            <div className="text-[10px] text-slate-400 leading-tight">Patient 103: Red-flags trigger immediate ER escalation</div>
-          </button>
-
-          <button
-            onClick={() => applyScenarioPreset('UNASSESSED')}
-            disabled={isLoading}
-            className="text-left p-2.5 rounded-lg bg-purple-950/40 hover:bg-purple-950/60 border border-purple-800/60 text-xs transition-colors"
-          >
-            <div className="font-bold text-purple-300 mb-0.5">Scenario 3: Missing Risk Gate</div>
-            <div className="text-[10px] text-slate-400 leading-tight">Missing assessment never assumed low risk</div>
-          </button>
-
-          <button
-            onClick={() => applyScenarioPreset('MISMATCH')}
-            disabled={isLoading}
-            className="text-left p-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-xs transition-colors"
-          >
-            <div className="font-bold text-amber-300 mb-0.5">Scenario 4: Service Mismatch</div>
-            <div className="text-[10px] text-slate-400 leading-tight">Filters out facilities lacking required surgical care</div>
-          </button>
         </div>
       </div>
 
@@ -309,8 +192,6 @@ export default function TravelOptimizationDashboard({ initialPatientId }: { init
         onChangeService={(s) => setRequiredService(s)}
         transportMode={transportMode}
         onChangeTransportMode={(m) => setTransportMode(m)}
-        clinicalUrgencySimulation={clinicalUrgency}
-        onChangeClinicalUrgencySimulation={(u) => setClinicalUrgency(u)}
         isLoading={isLoading}
         onRunComparison={handleRunComparison}
       />
@@ -378,15 +259,16 @@ export default function TravelOptimizationDashboard({ initialPatientId }: { init
                 </span>
               </div>
               <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white">
-                {comparisonResult.recommendedCategory === 'LOCAL_VERIFIED_CLINIC'
-                  ? 'Local Surgical Follow-Up Approved'
+              {comparisonResult.recommendedCategory === 'LOCAL_VERIFIED_CLINIC'
+                  ? 'Verified Local Facility Option'
                   : comparisonResult.recommendedCategory === 'ORIGINAL_SURGICAL_HOSPITAL'
-                  ? 'Return to Primary Surgical Center Recommended'
-                  : 'Teleconsultation Hybrid Recommended'}
+                  ? 'Primary Surgical Center Option'
+                  : 'Care Team Coordination Needed'}
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
                 {comparisonResult.recommendationRationale}
               </p>
+              <p className="text-[11px] text-amber-200">Travel estimates support coordination only. Confirm suitability with the clinician and availability with the facility.</p>
             </div>
 
             {/* Savings Metrics Pills */}

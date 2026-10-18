@@ -1,136 +1,87 @@
 'use client';
 
-// ============================================================================
-// TELE-FOLLOW-UP ORCHESTRATOR - CENTRAL FRONTEND AUTH CONTEXT
-// Manages JWT storage, authentication state, and Role-Based Access
-// ============================================================================
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-export type Role = 'PATIENT' | 'CLINICIAN' | 'COORDINATOR';
+export type Role = 'PATIENT' | 'CLINICIAN' | 'COORDINATOR' | 'ADMIN';
 
 export interface User {
   id: string;
   email: string;
   role: Role;
   name?: string;
+  patientId?: string;
+  mrn?: string;
 }
 
 export interface AuthContextType {
   user: User | null;
-  token: string | null;
   role: Role | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (token: string, user: User) => void;
-  logout: () => void;
-  switchRolePreview: (role: Role) => void;
+  login: (user: User) => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const TOKEN_STORAGE_KEY = 'teleflow_auth_token';
-const USER_STORAGE_KEY = 'teleflow_auth_user';
+const isProtectedPath = (path: string) =>
+  path === '/' ||
+  path.startsWith('/patients/') ||
+  path.startsWith('/admin/') ||
+  path.startsWith('/clinician/') ||
+  path.startsWith('/coordinator/') ||
+  path.startsWith('/risk-assessment/') ||
+  path.startsWith('/travel-comparison/') ||
+  path.startsWith('/follow-ups/') ||
+  path.startsWith('/teleconsult/');
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
-  // Initialize Auth state from localStorage
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-      const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+    let active = true;
+    fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const result = await response.json();
+        return result?.success ? (result.data?.user as User) : null;
+      })
+      .then((sessionUser) => {
+        if (active) setUser(sessionUser);
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
 
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      } else {
-        // Fallback default for clinical prototype development preview
-        const defaultClinician: User = {
-          id: 'doc-ramanathan',
-          email: 'clinician@teleflow.org',
-          role: 'CLINICIAN',
-          name: 'Dr. V. K. Ramanathan',
-        };
-        const defaultToken = 'mock-dev-jwt-clinician-token';
-        setToken(defaultToken);
-        setUser(defaultClinician);
-        localStorage.setItem(TOKEN_STORAGE_KEY, defaultToken);
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(defaultClinician));
-      }
-    } catch (err) {
-      console.warn('[AuthContext] Error reading from localStorage:', err);
-    } finally {
-      setIsLoading(false);
-    }
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken);
-    setUser(newUser);
+  useEffect(() => {
+    if (!isLoading && !user && isProtectedPath(pathname)) router.replace('/login');
+  }, [isLoading, user, pathname, router]);
+
+  const login = (signedInUser: User) => setUser(signedInUser);
+
+  const logout = async () => {
     try {
-      localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
-    } catch (err) {
-      console.error('[AuthContext] Failed to persist credentials:', err);
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } finally {
+      setUser(null);
+      router.push('/login');
     }
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    try {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(USER_STORAGE_KEY);
-    } catch (err) {
-      console.error('[AuthContext] Failed to clear credentials:', err);
-    }
-  };
-
-  const switchRolePreview = (newRole: Role) => {
-    let mockUser: User;
-    if (newRole === 'PATIENT') {
-      mockUser = {
-        id: 'pat-101',
-        email: 'patient@teleflow.org',
-        role: 'PATIENT',
-        name: 'Rajesh Sharma',
-      };
-    } else if (newRole === 'COORDINATOR') {
-      mockUser = {
-        id: 'coord-01',
-        email: 'coordinator@teleflow.org',
-        role: 'COORDINATOR',
-        name: 'Care Coordinator Ananya',
-      };
-    } else {
-      mockUser = {
-        id: 'doc-ramanathan',
-        email: 'clinician@teleflow.org',
-        role: 'CLINICIAN',
-        name: 'Dr. V. K. Ramanathan',
-      };
-    }
-
-    const mockToken = `mock-dev-jwt-${newRole.toLowerCase()}-token`;
-    login(mockToken, mockUser);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        role: user?.role || null,
-        isAuthenticated: !!token && !!user,
-        isLoading,
-        login,
-        logout,
-        switchRolePreview,
-      }}
-    >
+    <AuthContext.Provider value={{ user, role: user?.role || null, isAuthenticated: !!user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -138,8 +89,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an <AuthProvider>');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

@@ -1,0 +1,12 @@
+﻿const base="http://localhost:8000";
+const login=await fetch(base+"/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:"demo.patient@teleflow.local",password:"LocalDemoPatient!2026"})});
+const cookie=login.headers.get("set-cookie")?.split(";")[0];
+const listResponse=await fetch(base+"/api/documents",{headers:{cookie}});
+const list=await listResponse.json();
+const doc=list.data?.documents?.find((item)=>item.originalName==="local-demo-upload-check.pdf");
+console.log("DOCUMENT_LIST_HTTP="+listResponse.status+" found="+Boolean(doc));
+if(!listResponse.ok||!doc) throw new Error("uploaded document missing from patient list");
+const downloadResponse=await fetch(base+"/api/documents/"+encodeURIComponent(doc.id)+"/file",{headers:{cookie}});
+const downloaded=Buffer.from(await downloadResponse.arrayBuffer());
+if(!downloadResponse.ok||!downloaded.toString("utf8").startsWith("%PDF-1.4")) throw new Error("encrypted document download could not be decrypted");
+console.log("PASS encrypted document download/decryption");

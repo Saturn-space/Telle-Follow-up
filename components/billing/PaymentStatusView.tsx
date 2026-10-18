@@ -4,7 +4,7 @@
 // TELE-FOLLOW-UP ORCHESTRATOR - RAZORPAY PAYMENT GATEWAY (INR ONLY)
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PaymentOrder, FollowUpPlan, SERVICE_PRICING_INR } from '@/lib/types/followup';
 import {
   CreditCard,
@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Lock,
   RefreshCw,
-  XCircle,
   HelpCircle,
   Clock,
   Receipt,
@@ -39,38 +38,35 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
   const [paymentSuccess, setPaymentSuccess] = useState<boolean | null>(null);
   const [userPayments, setUserPayments] = useState<PaymentOrder[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(false);
 
-  const isEnabled = process.env.NEXT_PUBLIC_PAYMENTS_ENABLED === 'true';
   const serviceInfo = SERVICE_PRICING_INR[selectedService] || SERVICE_PRICING_INR.TELECONSULTATION;
+  const effectiveAppointmentId = plan?.appointments?.find((appointment) => appointment.id === selectedAppointmentId)?.id || plan?.appointments?.[0]?.id || '';
 
-  // Set default appointment ID if plan has appointments
-  useEffect(() => {
-    if (plan?.appointments && plan.appointments.length > 0) {
-      setSelectedAppointmentId(plan.appointments[0].id);
-    }
-  }, [plan]);
-
-  // Load payment history on mount
-  useEffect(() => {
-    loadUserPayments();
-  }, []);
-
-  const loadUserPayments = async () => {
+  const loadUserPayments = useCallback(async () => {
     setIsLoadingHistory(true);
     try {
-      const res = await fetch('/api/payments/my-payments', {
-        headers: { 'x-user-id': 'pat-101', 'x-user-role': 'PATIENT' },
-      });
+      const res = await fetch('/api/payments/my-payments', { credentials: 'same-origin' });
       const json = await res.json();
       if (res.ok && json.data?.payments) {
         setUserPayments(json.data.payments);
       }
     } catch {
-      // Offline fallback
+      setPaymentStatusMessage('Payment history could not be loaded. Retry when the service is available.');
+      setPaymentSuccess(false);
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, []);
+
+  // Load payment history and provider availability on mount.
+  useEffect(() => {
+    void Promise.resolve().then(loadUserPayments);
+    void fetch('/api/payments/config', { credentials: 'same-origin', cache: 'no-store' })
+      .then((response) => response.json())
+      .then((result) => setIsEnabled(result?.data?.enabled === true))
+      .catch(() => setIsEnabled(false));
+  }, [loadUserPayments]);
 
   // Load Razorpay Checkout Script dynamically
   const loadRazorpayScript = (): Promise<boolean> => {
@@ -94,17 +90,28 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
     setPaymentStatusMessage(null);
     setPaymentSuccess(null);
 
+    if (!plan?.id || !effectiveAppointmentId) {
+      setPaymentSuccess(false);
+      setPaymentStatusMessage('Payment needs a saved care plan and scheduled appointment. Care itself remains available.');
+      setIsProcessing(false);
+      return;
+    }
+    if (!isEnabled) {
+      setPaymentSuccess(false);
+      setPaymentStatusMessage('Payments are disabled or not configured. This does not affect care or follow-up access.');
+      setIsProcessing(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': 'pat-101',
-          'x-user-role': 'PATIENT',
         },
         body: JSON.stringify({
-          planId: plan?.id || 'plan-101',
-          appointmentId: selectedAppointmentId || undefined,
+          planId: plan.id,
+          appointmentId: effectiveAppointmentId,
           serviceType: selectedService,
           currency: 'INR',
         }),
@@ -119,12 +126,12 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
       }
 
       const order: PaymentOrder = json.data.order;
-      const keyId = json.data.keyId || 'rzp_test_placeholder';
+      const keyId = json.data.keyId;
       setCurrentOrder(order);
 
       // Attempt loading Razorpay Checkout SDK
       const scriptLoaded = await loadRazorpayScript();
-      if (scriptLoaded && window.Razorpay && keyId && !keyId.includes('placeholder')) {
+      if (scriptLoaded && window.Razorpay && keyId) {
         const options = {
           key: keyId,
           amount: order.amount,
@@ -132,11 +139,6 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
           name: 'Tele-Follow-Up Orchestrator',
           description: serviceInfo.description,
           order_id: order.razorpayOrderId,
-          prefill: {
-            name: 'Rajesh Sharma',
-            email: 'rajesh.sharma@example.in',
-            contact: '+919876543210',
-          },
           theme: { color: '#0d9488' },
           handler: async function (response: any) {
             await handleVerifyPayment(order.id, response.razorpay_order_id, response.razorpay_payment_id, response.razorpay_signature);
@@ -158,8 +160,8 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
         });
         rzp.open();
       } else {
-        // Inform user that order is created in sandbox mode ready for server-side verification
-        setPaymentStatusMessage(`Order created (${order.razorpayOrderId}) for ₹${serviceInfo.rupees}. Test sandbox ready for server verification.`);
+        setPaymentSuccess(false);
+        setPaymentStatusMessage('The provider order was created, but checkout could not be loaded. No payment was completed.');
         setIsProcessing(false);
       }
     } catch (err: unknown) {
@@ -191,14 +193,18 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
 
       const json = await res.json();
       if (res.ok && json.success) {
-        setPaymentSuccess(true);
-        setPaymentStatusMessage('Payment verified successfully via timing-safe HMAC-SHA256 signature check. Appointment status transitioned to CONFIRMED.');
-        setCurrentOrder((prev) => (prev ? { ...prev, status: 'CAPTURED', razorpayPaymentId } : null));
+        const verifiedOrder = json.data?.order as PaymentOrder | undefined;
+        const captured = verifiedOrder?.status === 'CAPTURED';
+        setPaymentSuccess(captured ? true : null);
+        setPaymentStatusMessage(captured
+          ? 'The payment provider confirmed capture. Payment does not change appointment status or determine access to care.'
+          : 'The provider authorized the payment, but capture is still pending. Care remains available.');
+        setCurrentOrder((prev) => prev ? { ...prev, ...(verifiedOrder || {}), razorpayPaymentId } : null);
         await loadUserPayments();
       } else {
         setPaymentSuccess(false);
         setPaymentStatusMessage(json.error?.message || 'Payment signature verification failed.');
-        setCurrentOrder((prev) => (prev ? { ...prev, status: 'FAILED' } : null));
+        await loadUserPayments();
       }
     } catch (err: unknown) {
       setPaymentSuccess(false);
@@ -206,17 +212,6 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  // Test sandbox execution
-  const handleSimulateVerification = (useValidSignature: boolean) => {
-    if (!currentOrder) return;
-    handleVerifyPayment(
-      currentOrder.id,
-      currentOrder.razorpayOrderId,
-      'pay_sandbox_test_' + Date.now().toString().slice(-6),
-      useValidSignature ? 'test_valid_signature' : 'tampered_invalid_signature'
-    );
   };
 
   return (
@@ -245,7 +240,7 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono bg-[#F0F3FF] text-[#0E1C30] border border-[#DCE5F5] px-3.5 py-1.5 rounded-xl font-medium">
-              MODE: {isEnabled ? 'LIVE GATEWAY' : 'TEST MODE (SANDBOX ACTIVE)'}
+              MODE: {isEnabled ? 'GATEWAY CONFIGURED' : 'PAYMENTS DISABLED'}
             </span>
           </div>
         </div>
@@ -296,7 +291,7 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
                   Link to Scheduled Appointment
                 </label>
                 <select
-                  value={selectedAppointmentId}
+                  value={effectiveAppointmentId}
                   onChange={(e) => setSelectedAppointmentId(e.target.value)}
                   disabled={isProcessing}
                   className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500 bg-white"
@@ -322,8 +317,8 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
               <span className="font-mono text-slate-700">{serviceInfo.paise} paise</span>
             </div>
             <div className="flex justify-between text-slate-600">
-              <span>GST / Healthcare Cess (0% Post-Op Exempt):</span>
-              <span className="font-mono text-slate-700">₹0.00</span>
+              <span>Taxes or gateway fees:</span>
+              <span className="font-mono text-slate-700">As shown by the payment provider</span>
             </div>
             <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-bold text-slate-900">
               <span>Total Payable (INR):</span>
@@ -336,7 +331,7 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
             <button
               type="button"
               onClick={handleInitiatePayment}
-              disabled={isProcessing}
+              disabled={isProcessing || !isEnabled || !plan?.id || !effectiveAppointmentId}
               className="w-full flex items-center justify-center gap-2 bg-[#1745D8] hover:bg-[#1238B5] text-white font-bold text-xs py-3 px-4 rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
             >
               {isProcessing ? (
@@ -347,12 +342,12 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
               ) : (
                 <>
                   <Lock className="w-4 h-4" />
-                  <span>Pay ₹{serviceInfo.rupees} via Razorpay (INR)</span>
+                  <span>{isEnabled ? `Pay ₹${serviceInfo.rupees} via Razorpay (INR)` : 'Payments are unavailable'}</span>
                 </>
               )}
             </button>
             <p className="text-[11px] text-slate-500 text-center mt-2">
-              Protected by 256-bit SSL encryption. Razorpay test sandbox active.
+              {isEnabled ? 'Checkout opens with the configured payment provider.' : 'Payments are disabled or not configured. Care continues without payment.'}
             </p>
           </div>
         </div>
@@ -402,38 +397,12 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
                   </div>
                 </div>
 
-                {/* Sandbox verification buttons */}
-                {currentOrder.status === 'PENDING' && (
-                  <div className="space-y-2 pt-1">
-                    <span className="text-[11px] font-bold text-slate-700 block">
-                      Sandbox Cryptographic Verification:
-                    </span>
-                    <button
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={() => handleSimulateVerification(true)}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Verify Signature (Confirm Payment)</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={() => handleSimulateVerification(false)}
-                      className="w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <XCircle className="w-3.5 h-3.5" />
-                      <span>Simulate Tampered Signature (Reject)</span>
-                    </button>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="p-6 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-500 space-y-1">
                 <Clock className="w-6 h-6 text-slate-400 mx-auto mb-2" />
                 <p className="font-semibold text-slate-700">No active checkout order</p>
-                <p>Select a service and click Pay Now to generate a Razorpay INR order.</p>
+                <p>A verified order appears here only after the payment provider accepts it.</p>
               </div>
             )}
 
@@ -441,15 +410,19 @@ export const PaymentStatusView: React.FC<PaymentStatusViewProps> = ({ plan }) =>
             {paymentStatusMessage && (
               <div
                 className={`mt-4 p-3 rounded-xl text-xs flex items-start gap-2.5 ${
-                  paymentSuccess
+                  paymentSuccess === true
                     ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
-                    : 'bg-rose-50 text-rose-900 border border-rose-200'
+                    : paymentSuccess === false
+                      ? 'bg-rose-50 text-rose-900 border border-rose-200'
+                      : 'bg-blue-50 text-blue-900 border border-blue-200'
                 }`}
               >
-                {paymentSuccess ? (
+                {paymentSuccess === true ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                ) : (
+                ) : paymentSuccess === false ? (
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                ) : (
+                  <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 )}
                 <span className="leading-relaxed">{paymentStatusMessage}</span>
               </div>

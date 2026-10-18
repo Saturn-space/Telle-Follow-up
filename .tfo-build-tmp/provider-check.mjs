@@ -1,0 +1,13 @@
+﻿const base="http://localhost:8000";
+const query=new URLSearchParams({city:"Bengaluru",latitude:"12.9716",longitude:"77.6416",radiusKm:"25",verificationStatus:"SEEDED_DEMO",limit:"10"});
+const providerResponse=await fetch(base+"/api/providers?"+query);
+const providerBody=await providerResponse.json();
+const demo=providerBody.data?.[0];
+if(!providerResponse.ok||!demo||demo.verificationStatus!=="SEEDED_DEMO") throw new Error("synthetic provider listing unavailable");
+console.log("PASS provider search returns a clearly marked synthetic example; count="+providerBody.meta?.total);
+const adminResponse=await fetch(base+"/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:"demo.admin@teleflow.local",password:"LocalDemoAdmin!2026"})});
+const cookie=adminResponse.headers.get("set-cookie")?.split(";")[0];
+const verifyResponse=await fetch(base+"/api/providers/"+encodeURIComponent(demo.id)+"/verification",{method:"POST",headers:{"content-type":"application/json",cookie},body:JSON.stringify({status:"VERIFIED",registryLicenseNo:"DEMO-NOT-REAL",evidenceNotes:"Synthetic fixture cannot be verified as a real healthcare provider."})});
+const verifyBody=await verifyResponse.json();
+if(verifyResponse.status!==409||verifyBody.error?.code!=="SYNTHETIC_DEMO_CANNOT_BE_VERIFIED") throw new Error("synthetic provider verification guard failed");
+console.log("PASS admin cannot mark a synthetic listing as verified");

@@ -1,56 +1,15 @@
-// ============================================================================
-// API ROUTE: /api/providers/[providerId]/services
-// GET: Retrieve listed recovery services and pricing for a specific provider
-// ============================================================================
-
 import { NextRequest, NextResponse } from 'next/server';
-import { providerRepository } from '@/lib/db/provider-repository';
+import { prisma } from '@/lib/prisma';
 
-interface RouteParams {
-  params: Promise<{
-    providerId: string;
-  }>;
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ providerId: string }> }) {
   try {
     const { providerId } = await params;
-    const facility = providerRepository.getFacilityById(providerId);
-
-    if (!facility) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FACILITY_NOT_FOUND',
-            message: `Facility with ID ${providerId} not found.`,
-          },
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: facility.services,
-      meta: {
-        facilityId: facility.id,
-        facilityName: facility.name,
-        servicesCount: facility.services.length,
-      },
-    });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown internal error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'SERVICES_FETCH_FAILED',
-          message: 'Failed to retrieve provider services.',
-          details: process.env.NODE_ENV === 'development' ? message : undefined,
-        },
-      },
-      { status: 500 }
-    );
+    const facility = await prisma.healthcareFacility.findUnique({ where: { id: providerId, isActive: true }, select: { id: true } });
+    if (!facility) return NextResponse.json({ success: false, error: { code: 'FACILITY_NOT_FOUND', message: 'Facility was not found.' } }, { status: 404 });
+    const services = await prisma.facilityService.findMany({ where: { facilityId: providerId }, orderBy: { serviceCategory: 'asc' } });
+    return NextResponse.json({ success: true, data: services, meta: { count: services.length } });
+  } catch (error) {
+    console.error('[providers/:id/services] Lookup failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'DIRECTORY_UNAVAILABLE', message: 'Facility services could not be loaded.' } }, { status: 503 });
   }
 }

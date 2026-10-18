@@ -41,7 +41,7 @@ export const TeleconsultSuite: React.FC<TeleconsultSuiteProps> = ({
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
 
   const domain = activeSession?.domain || process.env.NEXT_PUBLIC_JITSI_DOMAIN || 'meet.jit.si';
-  const roomName = activeSession?.roomName || 'tfo-sess-demo-sample';
+  const roomName = activeSession?.roomName || '';
   const meetingUrl = `https://${domain}/${roomName}`;
   const iframeSrc = `${meetingUrl}#config.prejoinPageEnabled=false&interfaceConfig.SHOW_JITSI_WATERMARK=false`;
 
@@ -63,12 +63,10 @@ export const TeleconsultSuite: React.FC<TeleconsultSuiteProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': userRole,
         },
         body: JSON.stringify({
           appointmentId: activeAppointment.id,
           teleSessionId: activeSession?.id,
-          clinicianId: 'Dr. V. K. Ramanathan (Senior Attending Surgeon)',
           subjectiveNotes,
           objectiveFindings: objectiveFindings || undefined,
           assessmentPlan,
@@ -101,17 +99,17 @@ export const TeleconsultSuite: React.FC<TeleconsultSuiteProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <span>Encrypted Teleconsultation Suite</span>
+                <span>Teleconsultation Suite</span>
                 <span className="text-[10px] font-mono bg-cyan-50 text-cyan-700 px-2 py-0.5 rounded border border-cyan-200">
                   Jitsi External API
                 </span>
                 <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
                   <Wifi className="w-3 h-3" />
-                  <span>Service Connected</span>
+                  <span>Room link generated</span>
                 </span>
               </h3>
               <p className="text-xs text-slate-500">
-                Peer-to-peer encrypted video coordination between patient and operating surgical team.
+                This meeting opens on an external Jitsi domain. Connection security and data handling depend on that provider.
               </p>
             </div>
           </div>
@@ -150,7 +148,7 @@ export const TeleconsultSuite: React.FC<TeleconsultSuiteProps> = ({
           <div className="bg-slate-800/90 px-4 py-2 text-white text-xs flex items-center justify-between">
             <span className="flex items-center gap-1.5 font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Live Consultation Room ({domain})
+              External meeting room ({domain})
             </span>
             <div className="flex items-center gap-3">
               <span className="text-[11px] text-slate-400">
@@ -172,7 +170,7 @@ export const TeleconsultSuite: React.FC<TeleconsultSuiteProps> = ({
             {!isIframeLoaded && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-400 text-xs">
                 <RefreshCw className="w-6 h-6 animate-spin text-teal-500 mb-2" />
-                <span>Initializing Encrypted Jitsi Video Stream...</span>
+                <span>Connecting to the Jitsi meeting…</span>
               </div>
             )}
             <iframe
@@ -185,7 +183,8 @@ export const TeleconsultSuite: React.FC<TeleconsultSuiteProps> = ({
           </div>
         </div>
 
-        {/* Doctor Clinical Notes / Outcome Panel */}
+        {/* Only the assigned clinician receives the clinical note form. */}
+        {userRole === 'CLINICIAN' ? (
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
@@ -193,9 +192,7 @@ export const TeleconsultSuite: React.FC<TeleconsultSuiteProps> = ({
                 <FileText className="w-4 h-4 text-teal-600" />
                 <h4 className="text-sm font-bold text-slate-900">Clinical Consultation Record</h4>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-700">
-                {userRole === 'CLINICIAN' ? 'Clinician Mode' : 'Read-Only Mode'}
-              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-700">Clinician Mode</span>
             </div>
 
             {submitSuccess ? (
@@ -292,6 +289,15 @@ export const TeleconsultSuite: React.FC<TeleconsultSuiteProps> = ({
             )}
           </div>
         </div>
+        ) : (
+          <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <ShieldCheck className="h-4 w-4 text-teal-600" />
+              <h4 className="text-sm font-bold text-slate-900">Consultation in progress</h4>
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-slate-600">You are connected to the video room. The assigned clinician will add the consultation notes to your appointment after the call.</p>
+          </aside>
+        )}
       </div>
     </div>
   );

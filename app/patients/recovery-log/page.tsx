@@ -25,7 +25,7 @@ import Link from 'next/link';
 
 export default function PatientRecoveryLogPage() {
   const { user } = useAuth();
-  const patientId = user?.role === 'PATIENT' ? user.id : 'pat-101';
+  const patientId = user?.role === 'PATIENT' ? user.patientId : undefined;
 
   const [temperatureC, setTemperatureC] = useState<number>(37.1);
   const [heartRate, setHeartRate] = useState<number>(78);
@@ -34,6 +34,7 @@ export default function PatientRecoveryLogPage() {
   const [respiratoryRate, setRespiratoryRate] = useState<number>(16);
   const [oxygenSat, setOxygenSat] = useState<number>(98);
   const [painScore, setPainScore] = useState<number>(3);
+  const [postOpDay, setPostOpDay] = useState<number>(0);
   const [symptomsInput, setSymptomsInput] = useState<string>('Mild incision tenderness');
   const [woundDescription, setWoundDescription] = useState<string>(
     'Clean, dry, edges well-approximated'
@@ -50,9 +51,7 @@ export default function PatientRecoveryLogPage() {
     setResult(null);
 
     const payload = {
-      patientId,
-      postOpDay: 14,
-      logTimestamp: new Date().toISOString(),
+      postOpDay: Number(postOpDay),
       vitals: {
         temperatureC: Number(temperatureC),
         heartRate: Number(heartRate),
@@ -68,7 +67,8 @@ export default function PatientRecoveryLogPage() {
     };
 
     try {
-      const res = await apiClient.post(`/api/v1/patients/${patientId}/recovery-log`, payload);
+      if (!patientId) throw new Error('This account is not linked to a patient profile. Contact your care coordinator.');
+      const res = await apiClient.post(`/api/patients/${patientId}/recovery-logs`, payload);
       setResult(res.data);
     } catch (err: any) {
       setError(err?.message || 'Failed to submit recovery telemetry');
@@ -89,7 +89,7 @@ export default function PatientRecoveryLogPage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Daily Recovery Telemetry Log</h1>
           <p className="text-sm text-[#C0CAFF] mt-2 max-w-2xl leading-relaxed">
-            Record physiological vital signs and post-surgical wound observations. Data is ingested into PostgreSQL and instantly evaluated by the AI Risk Stratification CDS engine.
+            Record physiological vital signs and post-surgical wound observations. Entries are saved to your patient record; risk assessment requires a linked surgery record.
           </p>
         </div>
       </div>
@@ -105,12 +105,16 @@ export default function PatientRecoveryLogPage() {
         <div className="p-6 rounded-3xl bg-white border border-[#DCE5F5] shadow-md space-y-4 animate-in fade-in">
           <div className="flex items-center gap-2 text-[#047857] font-bold text-sm">
             <CheckCircle className="w-5 h-5 text-[#047857]" />
-            <span>Telemetry Ingested &amp; AI Risk Evaluated Successfully</span>
+            <span>
+              {result.riskAssessment
+                ? 'Recovery entry saved and risk assessment recorded'
+                : 'Recovery entry saved; risk assessment unavailable'}
+            </span>
           </div>
 
           <div
             className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-              result.isHighRisk
+              result.riskAssessment?.isEscalated || result.riskAssessment?.riskLevel === 'CRITICAL' || result.riskAssessment?.riskLevel === 'HIGH'
                 ? 'bg-[#FEECEB] border-[#FFDAD6] text-[#B91C1C]'
                 : 'bg-[#E6F8F2] border-[#A7F3D0] text-[#047857]'
             }`}
@@ -120,14 +124,14 @@ export default function PatientRecoveryLogPage() {
                 Risk Engine Stratification Output
               </div>
               <div className="text-lg font-black mt-0.5">
-                Risk Tier: {result.riskAssessment?.riskLevel || 'LOW'}
+                Risk Tier: {result.riskAssessment?.riskLevel || 'UNAVAILABLE'}
               </div>
               <p className="text-xs mt-1 max-w-xl text-[#0E1C30]/80">
-                {result.riskAssessment?.clinicalSummary}
+                {result.riskAssessment?.clinicalSummary || result.riskAssessmentMessage}
               </p>
             </div>
 
-            {result.isHighRisk ? (
+            {result.riskAssessment?.isEscalated || result.riskAssessment?.riskLevel === 'CRITICAL' || result.riskAssessment?.riskLevel === 'HIGH' ? (
               <Link
                 href={`/travel-comparison/${patientId}`}
                 className="px-5 py-2.5 bg-[#B91C1C] text-white font-bold rounded-xl text-xs hover:bg-[#93000A] flex items-center gap-2 transition shadow-sm self-start sm:self-auto"
@@ -156,6 +160,19 @@ export default function PatientRecoveryLogPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 text-xs">
+          <div>
+            <label className="block text-[#536078] font-semibold mb-1.5">Post-operative day</label>
+            <input
+              type="number"
+              min={0}
+              max={3650}
+              required
+              value={postOpDay}
+              onChange={(e) => setPostOpDay(parseInt(e.target.value, 10) || 0)}
+              className="w-full h-11 px-3.5 border border-[#DCE5F5] rounded-xl text-[#0E1C30] font-mono tnum focus:outline-hidden focus:ring-2 focus:ring-[#1745D8] transition"
+            />
+            <p className="mt-1 text-[10px] text-[#6B7488]">Used if no surgery date is linked to your profile.</p>
+          </div>
           <div>
             <label className="block text-[#536078] font-semibold mb-1.5">Body Temperature (°C)</label>
             <input

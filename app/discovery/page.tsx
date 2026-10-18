@@ -51,9 +51,13 @@ const DEFAULT_FILTERS: SearchFiltersState = {
   radiusKm: 25,
   services: [],
   facilityType: [],
-  verificationStatus: undefined,
+  verificationStatus: process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+    ? 'SEEDED_DEMO'
+    : undefined,
   emergencyOnly: false,
 };
+
+const isLocalDemo = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
 // Bengaluru Indiranagar default center coordinates for demo
 const DEFAULT_CENTER = { lat: 12.9716, lng: 77.6412 };
@@ -245,8 +249,8 @@ export default function HealthcareDiscoveryPage() {
                 <h1 className="font-bold text-base text-[#0E1C30] leading-tight">
                   Healthcare Provider Discovery & Care Coordination
                 </h1>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#E6F8F2] text-[#047857] border border-[#A7F3D0]">
-                  Verified Directory
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${isLocalDemo ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-[#E6F8F2] text-[#047857] border-[#A7F3D0]'}`}>
+                  {isLocalDemo ? 'Synthetic Demo Directory' : 'Verified Directory'}
                 </span>
               </div>
               <p className="text-xs text-[#536078]">
@@ -270,6 +274,11 @@ export default function HealthcareDiscoveryPage() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {isLocalDemo && (
+          <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-950">
+            Local demo listings are synthetic and are not real healthcare providers. Referral and travel actions stay unavailable until an administrator verifies a real facility.
+          </div>
+        )}
         {/* Cross-Module Testing Bar */}
         <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -25,14 +26,13 @@ export default function ReferralModal({
   onClose,
   onSuccess,
 }: ReferralModalProps) {
-  const [patientId, setPatientId] = useState('pat_synt_101');
+  const { user } = useAuth();
+  const [patientId, setPatientId] = useState('');
   const [selectedServices, setSelectedServices] = useState<ServiceCategory[]>(
     facility?.services.map((s) => s.serviceCategory) || ['WOUND_CARE']
   );
   const [urgencyLevel, setUrgencyLevel] = useState<'ROUTINE' | 'PRIORITY' | 'URGENT'>('ROUTINE');
-  const [clinicalSummary, setClinicalSummary] = useState(
-    'Post-operative follow-up care referral. Patient is Day 10 post-surgery. Local clinical examination and routine wound care requested.'
-  );
+  const [clinicalSummary, setClinicalSummary] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +53,11 @@ export default function ReferralModal({
       return;
     }
 
+    if (!(user?.role === 'PATIENT' ? user.patientId : patientId)) {
+      setError('Select or enter an authorized patient record ID.');
+      return;
+    }
+
     if (!clinicalSummary.trim()) {
       setError('Clinical summary notes are mandatory for referral handoff.');
       return;
@@ -64,15 +69,13 @@ export default function ReferralModal({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': 'CLINICIAN',
         },
         body: JSON.stringify({
-          patientId,
+          patientId: user?.role === 'PATIENT' ? user.patientId : patientId,
           facilityId: facility.id,
           requestedServices: selectedServices,
           urgencyLevel,
           clinicalSummary,
-          attendingPhysicianId: 'dr_surgical_lead',
         }),
       });
 
@@ -81,7 +84,7 @@ export default function ReferralModal({
         throw new Error(json.error?.message || 'Referral dispatch failed.');
       }
 
-      onSuccess(`Care coordination referral successfully dispatched to ${facility.name}.`);
+      onSuccess(`Referral saved for ${facility.name}. The care team will review its status.`);
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to dispatch referral.');
@@ -130,12 +133,13 @@ export default function ReferralModal({
           {/* Patient Reference */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Patient Identification (Synthetic ID)
+                Patient Record ID
             </label>
             <input
               type="text"
-              value={patientId}
+              value={user?.role === 'PATIENT' ? user.patientId || '' : patientId}
               onChange={(e) => setPatientId(e.target.value)}
+              readOnly={user?.role === 'PATIENT'}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500"
               required
             />

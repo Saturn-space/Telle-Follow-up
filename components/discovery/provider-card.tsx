@@ -120,6 +120,7 @@ export default function ProviderCard({
       <h4 className="text-base font-bold text-slate-900 group-hover:text-teal-700 transition-colors">
         {facility.name}
       </h4>
+      {isDemo && <p className="mt-1 text-[11px] font-medium text-amber-800">Synthetic sample only — not a real care provider.</p>}
 
       <div className="mt-1.5 flex items-start gap-1.5 text-xs text-slate-600">
         <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
@@ -202,7 +203,7 @@ export default function ProviderCard({
             View Full Profile
           </button>
 
-          {onForwardToTravel && (
+          {onForwardToTravel && isVerified && (
             <button
               type="button"
               onClick={(e) => {
@@ -217,7 +218,7 @@ export default function ProviderCard({
             </button>
           )}
 
-          {onVerify && !isVerified && (
+          {onVerify && !isVerified && !isDemo && (
             <button
               type="button"
               onClick={(e) => {
@@ -235,12 +236,15 @@ export default function ProviderCard({
         <button
           type="button"
           onClick={(e) => {
+            if (!isVerified) return;
             e.stopPropagation();
             onRequestReferral(facility);
           }}
-          className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm"
+          disabled={!isVerified}
+          title={isVerified ? 'Coordinate care with this verified facility.' : 'Only administrator-verified facilities can receive referrals.'}
+          className="text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
         >
-          Coordinate Care
+          {isVerified ? 'Coordinate Care' : 'Verification required'}
         </button>
       </div>
     </div>

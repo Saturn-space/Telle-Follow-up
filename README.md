@@ -1,194 +1,139 @@
-# Tele-Follow-Up Orchestrator
-> **An AI-Assisted Post-Surgical Follow-Up Coordination System**  
-> GitHub Repository: `Saturn-space/Telle-Follow-up`  
-> Feature Branch: `feature/member-5-phase-4-release`
+# Tele-Follow-Up
 
----
+Tele-Follow-Up is a Next.js application for post-discharge recovery logs, clinician risk review, verified facility search, travel estimates, care plans, appointments, teleconsultation records, and optional payments.
 
-## 1. Project Purpose & Overview
+Clinical assessments and route estimates support care coordination. They do not replace a clinician's judgment, emergency services, or confirmation from a facility.
 
-Patients frequently travel long distances or across state lines to specialized tertiary hospitals for complex surgical procedures (e.g., CABG, joint arthroplasty, oncologic resections). After discharge, routine post-operative checks typically require repeated long-distance return trips. This causes heavy financial burdens, transit fatigue during vulnerable recovery phases, and logistical strain.
+## Active application
 
-The **Tele-Follow-Up Orchestrator** is an integrated coordination platform that:
-1. Ingests daily patient recovery symptoms, vitals, and verified OCR diagnostic summaries.
-2. Performs AI-assisted risk stratification to detect healing complications early.
-3. Discovers nearby verified healthcare facilities for routine wound dressings, suture removals, and blood draws.
-4. Computes transparent travel-versus-local trade-offs without compromising clinical necessity.
-5. Orchestrates doctor-approved follow-up care plans, local clinic visits, and secure teleconsultations.
+The repository root is the active application. It uses the Next.js App Router for both pages and `/api/*` endpoints, PostgreSQL through Prisma, and the root `prisma/schema.prisma` as its schema source. The old Express entry point is retired; `npm run server` now starts the same Next.js development server as `npm run dev`.
 
-> **Academic Prototype Notice:** This system is an academic clinical decision support (CDS) prototype, not an autonomous medical device. All AI assessments and follow-up plans require authorized clinician review and sign-off.
+The old `backend/`, `frontend/src/`, and nested `Telle-Follow-up/` trees are retained as legacy copies and are excluded from the root TypeScript build. Do not use their Prisma schemas or API routes for new work.
 
----
+## Requirements
 
-## 2. Five-Member Vertical Slice Architecture
+- Node.js 20 or later
+- PostgreSQL 14 or later
+- npm
 
-| Team Member | Module Ownership | Core Deliverables |
-| :--- | :--- | :--- |
-| **Member 1** | **Patient Registration & Recovery Monitoring** | Demographics, discharge orders, daily recovery telemetry, document OCR review UI, recovery timeline. |
-| **Member 2** | **AI Risk Prediction & Decision Support** | Longitudinal risk stratification, clinical red-flag detection, explanation rationale, doctor overrides. |
-| **Member 3** | **Local Healthcare Discovery & Directory** | Geospatial clinic search, capability filters (sutures, labs), verified provider registry. |
-| **Member 4** | **Travel Optimization & Escalation** | Transit route calculation, cost/time trade-off matrices, emergency escalation protocol. |
-| **Member 5** | **Follow-Up, Teleconsultation & Platform Integration** | Follow-up care plans, appointment lifecycle, Jitsi video consultation, optional payments, end-to-end orchestration. |
+## Local setup
 
----
+1. Install packages and create a local environment file:
 
-## 3. Technology Stack
+   ```powershell
+   npm ci
+   npm run setup:env
+   ```
 
-* **Frontend:** Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion.
-* **Backend:** Next.js App Router API Routes & Node.js services (`/api/followup/*`, `/api/teleconsult/*`, `/api/payments/*`, `/api/notifications`, `/api/integration/*`).
-* **Database & ORM:** PostgreSQL with Prisma ORM (`prisma/schema.prisma`).
-* **Teleconsultation:** Jitsi Meet External IFrame API with zero-PII room generation.
-* **Payments:** Official Razorpay Node.js SDK (Optional, disabled by default via `PAYMENTS_ENABLED="false"`).
-* **Testing:** Vitest, Node crypto testing suites.
-* **API Documentation:** OpenAPI 3.0 (`docs/openapi.json`).
+   `setup:env` copies placeholders from `.env.example` and leaves an existing `.env` untouched.
 
----
+2. Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and `DOCUMENT_STORAGE_KEY` in `.env`. Generate a 32-byte document key with:
 
-## 4. Key Architectural & Safety Invariants
+   ```powershell
+   node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))"
+   ```
 
-1. **Absolute Clinical Safety Escalation:**
-   If a patient exhibits acute surgical red flags (e.g., fever > 38.5°C, acute guarding, purulent discharge), routine travel optimization and remote appointment booking are **strictly suppressed**. The system returns `409 Conflict` (`CLINICAL_ESCALATION_OVERRIDE`) and routes the patient directly to emergency hospital evaluation.
-2. **Missing Risk Data Protection:**
-   Missing or stale risk data is **never** silently treated as safe. The system flags `RISK_DATA_UNAVAILABLE` and mandates explicit clinician review before any follow-up plan can be created.
-3. **Zero-PII Teleconsultation URLs:**
-   Jitsi rooms are generated using 128-bit cryptographically random hex strings (e.g., `tfo-sess-a94f83b172ec412e9d214f183c2a0011`). Patient names, MRNs, surgical procedures, and diagnoses are strictly excluded from room names and URL parameters.
-4. **Consultation Completion Integrity:**
-   Generating a meeting room or launching a call never marks a consultation complete. An appointment is only transitioned to `COMPLETED` when the attending doctor records and signs a `ConsultationRecord`.
-5. **Care Never Gated by Payment:**
-   Payment is optional and disabled by default. Payment failure or absence never gates urgent care, emergency escalation, or follow-up eligibility.
-6. **Timing-Safe Cryptographic Signature Verification:**
-   All Razorpay payment verifications use `crypto.timingSafeEqual` over backend HMAC-SHA256 calculations to prevent timing attacks.
+   Keep the document key backed up securely. Existing encrypted uploads cannot be read if this key is lost or changed. The default document directory is `.private-data/documents`, outside the public web directory; set `DOCUMENT_STORAGE_PATH` to a persistent private volume in deployments.
 
----
+3. Generate the Prisma client and apply migrations to a **fresh local development database**:
 
-## 5. Local Setup & Installation
+   ```powershell
+   npm run db:generate
+   npm run db:deploy
+   ```
 
-### Prerequisites
-* Node.js 20+
-* PostgreSQL instance (or use the included in-memory data store for local dev testing)
+   The repository includes the initial schema migration and a clinician-registration migration. Existing databases may already contain tables without Prisma migration history. Back up and compare such a database before baselining or applying migrations; do not reset it.
+   The generated client is written to ignored `generated/prisma` so regeneration does not replace the package client DLL used by another running Windows development server.
 
-### Installation Steps
-```bash
-# Clone repository
-git clone https://github.com/Saturn-space/Telle-Follow-up.git
-cd Telle-Follow-up
+4. Start the application:
 
-# Switch to Member 5 release branch
-git checkout feature/member-5-phase-4-release
+   ```powershell
+   npm run dev
+   ```
 
-# Install dependencies
-npm install
+   Open [http://localhost:8000](http://localhost:8000).
 
-# Setup environment variables
-cp .env.example .env.local
+For an isolated demo database on port 5433, use the checked-in Compose service and keep the database URL scoped to this PowerShell session:
 
-# Run automated test suites (24 tests)
-npm test
-
-# Run linter
-npm run lint
-
-# Start development server
+```powershell
+npm run db:demo:start
+$env:DATABASE_URL='postgresql://teleflow_demo:LocalDemoDb2026!@localhost:5433/tele_follow_up_demo?schema=public'
+$env:DEMO_MODE='true'
+npm run db:deploy
+npm run seed:demo
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
 
----
+`npm run db:demo:stop` stops PostgreSQL and keeps its local volume for the next run. The demo seed refuses production, non-local hosts, and any database other than `tele_follow_up_demo`.
 
-## 6. Environment Variables Reference (`.env.example`)
+Patient self-registration creates patient accounts only. Doctors can submit a separate clinician application; they cannot sign in until an administrator reviews the license details and approves it. The application form does not verify licenses against an external registry.
 
-```bash
-# Base Application URL
-APP_URL="http://localhost:3000"
+To provision the first administrator, set `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in the process environment, then run `npm run seed:admin`. The admin seed creates no sample clinical records. Use the administrator console to assign staff roles.
 
-# PostgreSQL Database (Shared Prisma)
-DATABASE_URL="postgresql://user:password@localhost:5432/tele_followup_db?schema=public"
+### Local demo accounts
 
-# Shared JWT Secret
-JWT_SECRET="development-jwt-secret-do-not-use-in-production"
+The demo seed is restricted to a non-production process with `DEMO_MODE=true` and a dedicated database named `tele_follow_up_demo` hosted on `localhost`, `127.0.0.1`, or `::1`. Apply migrations first, then run `npm run seed:demo`. It creates synthetic local records for a patient, clinician, administrator, pending clinician application, sample facility, reviewed assessment, billable follow-up appointment, and video session. The sample facility is marked as a demo record and cannot be used for referrals or travel recommendations. The seed does not create fake payment captures.
 
-# Jitsi Meet Domain (Defaults to public meet.jit.si or self-hosted instance)
-JITSI_DOMAIN="meet.jit.si"
+| Role | Email | Password | Demo use |
+|---|---|---|---|
+| Patient | `demo.patient@teleflow.local` | `LocalDemoPatient!2026` | Billing and patient side of the scheduled video consultation |
+| Doctor | `demo.doctor@teleflow.local` | `LocalDemoDoctor!2026` | Clinician dashboard and clinician side of the video consultation |
+| Administrator | `demo.admin@teleflow.local` | `LocalDemoAdmin!2026` | Review pending doctor registrations and administer the demo |
 
-# Optional Razorpay Gateway (Disabled by default)
-PAYMENTS_ENABLED="false"
-RAZORPAY_KEY_ID="rzp_test_placeholder"
-RAZORPAY_KEY_SECRET="placeholder_secret"
-NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_test_placeholder"
+The seeded pending doctor application is `demo.applicant@teleflow.local` with password `LocalDemoApplicant!2026`; it cannot sign in until approved. The application uses a clearly synthetic license number so the administrator can demonstrate hold, resume, and approval.
+
+These credentials are for local software testing only. They exist in the dedicated local demo database, not in any other configured database. The sign-in page has fill-account buttons in development; run `npm run seed:demo` first if the local demo database is empty.
+
+## Environment configuration
+
+Required values:
+
+- `DATABASE_URL`: PostgreSQL connection string.
+- `JWT_SECRET`: signing key, at least 32 characters.
+- `DOCUMENT_STORAGE_KEY`: base64 encoded 32-byte AES-GCM key.
+
+Optional integrations are off until configured:
+
+- `ANTHROPIC_API_KEY` enables risk explanation text; deterministic rules remain available without it.
+- `OCR_SERVICE_URL` and `OCR_API_KEY` enable the OCR.Space-compatible adapter. A user must consent on each upload before the document is sent to that external service. Without consent, the file is stored encrypted and OCR remains `NOT_REQUIRED`.
+- `PAYMENTS_ENABLED`, Razorpay credentials, and webhook secret enable payments. Payment does not gate care.
+- `NEXT_PUBLIC_DEMO_MODE=true` shows clearly labeled synthetic directory examples in local development. These entries are not real care providers.
+- `GEOCODING_SERVICE_URL` selects a Nominatim-compatible geocoder. Travel comparisons use city-level locations and clearly label approximate estimates.
+- `JITSI_DOMAIN` selects the external meeting domain. The public Jitsi domain does not require application credentials; configure a domain you control for production use.
+
+For billing, sign in with the patient demo account and open **Billing & Payments**. Checkout uses Razorpay test mode from local environment settings; never put provider secrets in the demo account table or source control. The seeded patient has an eligible appointment, but the seed does not mark anything paid. The current localhost app reports test checkout as configured. Video consulting uses the seeded appointment: sign in as the patient or assigned doctor and open the scheduled session. Jitsi requires no separate app username or password; allow camera and microphone access in the browser.
+
+See `.env.example` for the complete variable list. Never commit `.env`, encryption keys, or service credentials.
+
+## Database commands
+
+```powershell
+npm run db:validate  # validate the root Prisma schema
+npm run db:generate  # generate Prisma Client
+npm run db:status    # inspect migration state
+npm run db:migrate   # create/apply a development migration
+npm run db:deploy    # apply committed migrations
 ```
 
----
+No reset or destructive database command is part of the setup workflow.
 
-## 7. Database Migrations (PostgreSQL + Prisma)
+## Verification commands
 
-To run migrations against a live PostgreSQL database:
-```bash
-# Generate Prisma Client
-npx prisma generate
-
-# Create and apply migration
-npx prisma migrate dev --name init_tele_followup_orchestrator
-
-# Deploy in production
-npx prisma migrate deploy
-```
-
----
-
-## 8. Synthetic Demonstration Scenarios
-
-The orchestration hub provides 3 built-in synthetic test scenarios:
-
-### Scenario 1: Stable Post-CABG Patient (Rajesh Sharma, `pat-101`)
-* **Background:** 58M, Post-Coronary Artery Bypass Graft (3 vessels) at Apollo Chennai. Home: Bhubaneswar, Odisha (1,250 km away).
-* **Workflow:** Daily vitals stable $\to$ Member 2 assigns `LOW` risk tier (0.18) $\to$ Member 3 attaches local verified diagnostic lab $\to$ Member 4 calculates ₹16,500 and 28.5 hours saved $\to$ Member 5 schedules local resting ECG + encrypted video consultation with Dr. Ramanathan.
-
-### Scenario 2: Post-TKA Joint Patient (Anita Roy, `pat-102`)
-* **Background:** 64F, Total Knee Arthroplasty at Fortis Bengaluru. Home: Ranchi, Jharkhand (1,480 km away).
-* **Workflow:** Mild expected post-op swelling $\to$ Member 2 assigns `MEDIUM` risk tier (0.42) $\to$ Suture removal due on Post-Op Day 14 $\to$ Member 5 coordinates in-person staple removal at local verified orthopedic clinic (5.2 km away) followed by remote surgeon sign-off.
-
-### Scenario 3: Emergency Surgical Escalation (Sunita Devi, `pat-103`)
-* **Background:** 45F, Laparoscopic Cholecystectomy at AIIMS New Delhi. Home: Patna, Bihar.
-* **Workflow:** High-grade fever (39.1°C), bile leak suspicion, acute peritoneal guarding $\to$ Member 2 flags `HIGH` risk tier (0.89) $\to$ **Emergency Safety Escalation** triggers $\to$ Suppresses travel optimization $\to$ Blocks routine remote follow-up scheduling (`409 Conflict`) $\to$ Directs patient to urgent tertiary hospital emergency department.
-
----
-
-## 9. Automated Testing Baseline
-
-Automated test suites executed via Vitest:
-```bash
+```powershell
 npm test
+npx tsc --noEmit
+npm run lint
+npm run db:validate
 ```
-* `tests/followup-service.test.ts` (14 tests): Unit testing plan creation, appointment lifecycle, duplicate scheduling collisions, zero-PII teleconsultations, and HMAC signature validation.
-* `tests/api-security-and-hardening.test.ts` (7 tests): API security testing role authorization headers (`x-user-role`), cross-patient isolation, 403 Forbidden constraints, and 409 Conflict escalation overrides.
-* `tests/e2e-workflow.test.ts` (3 tests): Full end-to-end integration across all 5 member stages and emergency safety invariant enforcement.
 
-**Total:** 24 passing tests, 0 failures, 0 skipped.
+The OpenAPI documents are served at `/api/docs/openapi` and `/api/risk-assessments/openapi`.
 
----
+## Data and access rules
 
-## 10. API Specification
-
-See complete OpenAPI 3.0 specification in [`docs/openapi.json`](docs/openapi.json).
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
-
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/c752834b-f101-41e8-b3c0-c6518cf62c51
-View your app in AI Studio: https://ai.studio/apps/88bdf4d2-3705-4ab1-9047-d156d58213d8
-View your app in AI Studio: https://ai.studio/apps/a8aabaea-265c-4d3d-95a5-f1699f2dad33
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- Sessions use a signed HTTP-only cookie. Client-supplied role, user, and patient headers are not trusted.
+- Patient records, risk assessments, travel comparisons, providers, care plans, appointments, teleconsultation records, payment orders, documents, and notifications use PostgreSQL.
+- A travel comparison requires a recent clinician-reviewed risk assessment and verified, service-matched facility records. Route, time, and cost outputs are estimates, not booking confirmation or travel clearance.
+- Provider verification is an administrator-recorded decision with evidence and a license number. New community entries remain unverified until reviewed.
+- Uploaded PDF, PNG, and JPEG documents are encrypted at rest with AES-256-GCM and served only through an authenticated, patient-scoped route. OCR text is marked unverified.
+- Jitsi rooms use random non-identifying names. A consultation is completed only after a clinician saves a consultation record.
+- The initial admin seed does not create clinical demo data. Only add real provider or patient data through an authorized workflow.

@@ -213,13 +213,16 @@ async function runAllTests() {
 
   const validApiPayload = {
     patientId: 'pt-101',
-    origin: { latitude: 26.9, longitude: 75.8, label: 'Jaipur' },
     requiredService: 'POST_OP_WOUND_CARE',
     transportMode: 'DRIVING',
   };
   assert(
     TravelComparisonRequestSchema.safeParse(validApiPayload).success,
     'POST /api/travel/compare schema accepts valid request'
+  );
+  assert(
+    !TravelComparisonRequestSchema.safeParse({ ...validApiPayload, simulateClinicalUrgency: 'LOW', origin: { latitude: 26.9, longitude: 75.8, label: 'Jaipur' } }).success,
+    'POST /api/travel/compare rejects client-supplied risk and origin overrides'
   );
 
   const missingPatientIdPayload = {

@@ -53,6 +53,7 @@ describe('Phase 5: Express Central Gateway & Cross-Module Integration E2E', () =
     it('returns 200 OK for /health check', async () => {
       const res = await fetch(`${baseUrl}/health`);
       const body = await res.json();
+      if (res.status !== 200) { const errBody = await res.text(); console.error('Travel compare error body:', errBody); }
       expect(res.status).toBe(200);
       expect(body.status).toBe('HEALTHY');
       expect(body.service).toBe('tele-follow-up-orchestrator-backend');
@@ -141,6 +142,7 @@ describe('Phase 5: Express Central Gateway & Cross-Module Integration E2E', () =
           transportMode: 'DRIVING',
         }),
       });
+      if (res.status !== 200) { const errBody = await res.text(); console.error('Travel compare error body:', errBody); }
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.success).toBe(true);
@@ -180,6 +182,7 @@ describe('Phase 5: Express Central Gateway & Cross-Module Integration E2E', () =
       const res = await fetch(`${baseUrl}/api/v1/patients/pat-101`, {
         headers: { Authorization: `Bearer ${clinicianToken}` },
       });
+      if (res.status !== 200) { const errBody = await res.text(); console.error('Travel compare error body:', errBody); }
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.success).toBe(true);
@@ -272,6 +275,7 @@ describe('Phase 5: Express Central Gateway & Cross-Module Integration E2E', () =
       const res = await fetch(`${baseUrl}/api/v1/providers?city=Bengaluru`, {
         headers: { Authorization: `Bearer ${clinicianToken}` },
       });
+      if (res.status !== 200) { const errBody = await res.text(); console.error('Travel compare error body:', errBody); }
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.success).toBe(true);

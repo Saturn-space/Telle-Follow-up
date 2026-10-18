@@ -13,17 +13,17 @@ export interface GeocodingResult {
 
 // In-memory cache for repeated geocoding requests to respect OSM Nominatim policy
 const GEOCODE_CACHE = new Map<string, GeocodingResult>([
-  ['bengaluru', { latitude: 12.9716, longitude: 77.5946, displayName: 'Bengaluru, Karnataka, India', source: 'CACHE', isApproximate: false }],
-  ['bangalore', { latitude: 12.9716, longitude: 77.5946, displayName: 'Bengaluru, Karnataka, India', source: 'CACHE', isApproximate: false }],
-  ['indiranagar', { latitude: 12.9719, longitude: 77.6412, displayName: 'Indiranagar, Bengaluru, Karnataka, India', source: 'CACHE', isApproximate: false }],
-  ['koramangala', { latitude: 12.9352, longitude: 77.6245, displayName: 'Koramangala, Bengaluru, Karnataka, India', source: 'CACHE', isApproximate: false }],
-  ['mumbai', { latitude: 19.0760, longitude: 72.8777, displayName: 'Mumbai, Maharashtra, India', source: 'CACHE', isApproximate: false }],
-  ['bandra', { latitude: 19.0596, longitude: 72.8295, displayName: 'Bandra, Mumbai, Maharashtra, India', source: 'CACHE', isApproximate: false }],
-  ['andheri', { latitude: 19.1136, longitude: 72.8697, displayName: 'Andheri, Mumbai, Maharashtra, India', source: 'CACHE', isApproximate: false }],
-  ['new delhi', { latitude: 28.6139, longitude: 77.2090, displayName: 'New Delhi, Delhi, India', source: 'CACHE', isApproximate: false }],
-  ['delhi', { latitude: 28.6139, longitude: 77.2090, displayName: 'New Delhi, Delhi, India', source: 'CACHE', isApproximate: false }],
-  ['saket', { latitude: 28.5244, longitude: 77.2167, displayName: 'Saket, New Delhi, Delhi, India', source: 'CACHE', isApproximate: false }],
-  ['chennai', { latitude: 13.0827, longitude: 80.2707, displayName: 'Chennai, Tamil Nadu, India', source: 'CACHE', isApproximate: false }],
+  ['bengaluru', { latitude: 12.9716, longitude: 77.5946, displayName: 'Bengaluru, Karnataka, India', source: 'CACHE', isApproximate: true }],
+  ['bangalore', { latitude: 12.9716, longitude: 77.5946, displayName: 'Bengaluru, Karnataka, India', source: 'CACHE', isApproximate: true }],
+  ['indiranagar', { latitude: 12.9719, longitude: 77.6412, displayName: 'Indiranagar, Bengaluru, Karnataka, India', source: 'CACHE', isApproximate: true }],
+  ['koramangala', { latitude: 12.9352, longitude: 77.6245, displayName: 'Koramangala, Bengaluru, Karnataka, India', source: 'CACHE', isApproximate: true }],
+  ['mumbai', { latitude: 19.0760, longitude: 72.8777, displayName: 'Mumbai, Maharashtra, India', source: 'CACHE', isApproximate: true }],
+  ['bandra', { latitude: 19.0596, longitude: 72.8295, displayName: 'Bandra, Mumbai, Maharashtra, India', source: 'CACHE', isApproximate: true }],
+  ['andheri', { latitude: 19.1136, longitude: 72.8697, displayName: 'Andheri, Mumbai, Maharashtra, India', source: 'CACHE', isApproximate: true }],
+  ['new delhi', { latitude: 28.6139, longitude: 77.2090, displayName: 'New Delhi, Delhi, India', source: 'CACHE', isApproximate: true }],
+  ['delhi', { latitude: 28.6139, longitude: 77.2090, displayName: 'New Delhi, Delhi, India', source: 'CACHE', isApproximate: true }],
+  ['saket', { latitude: 28.5244, longitude: 77.2167, displayName: 'Saket, New Delhi, Delhi, India', source: 'CACHE', isApproximate: true }],
+  ['chennai', { latitude: 13.0827, longitude: 80.2707, displayName: 'Chennai, Tamil Nadu, India', source: 'CACHE', isApproximate: true }],
 ]);
 
 // Track last request time to strictly enforce Nominatim's 1-request-per-second limit

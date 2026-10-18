@@ -264,7 +264,7 @@ export async function calculateRoute(
   // ----------------------------------------------------
   // STEP 3: Live OSRM Routing Attempt (if allowed by Circuit Breaker)
   // ----------------------------------------------------
-  if (allowLiveCall) {
+  if (allowLiveCall && mode !== 'PUBLIC_TRANSIT') {
     const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=simplified&geometries=polyline`;
 
     try {
@@ -364,11 +364,14 @@ export async function calculateRoute(
       destination.latitude,
       destination.longitude
     ),
-    sourceAttribution:
-      'Deterministic Haversine calculation (with 1.3x empirical road tortuosity factor). Live routing service unconfigured or offline.',
+    sourceAttribution: mode === 'PUBLIC_TRANSIT'
+      ? 'Straight-line geographic estimate with a fixed road factor; public transit routes and schedules were not queried.'
+      : 'Deterministic Haversine calculation (with 1.3x empirical road tortuosity factor). Live routing service unconfigured or offline.',
     calculatedAt,
     warning:
-      cb.state === 'OPEN'
+      mode === 'PUBLIC_TRANSIT'
+        ? 'Public transit schedules and fares are not available from this estimator; distance and duration are approximate.'
+        : cb.state === 'OPEN'
         ? 'Circuit breaker OPEN: External routing API recently failed or timed out. Served via instant geometric fallback to maintain zero latency.'
         : 'Live OSRM routing was unreachable or rate-limited. Distance and duration are geometric estimates and do not reflect real-time traffic conditions.',
   };

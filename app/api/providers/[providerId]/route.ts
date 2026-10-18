@@ -1,140 +1,63 @@
-// ============================================================================
-// API ROUTE: /api/providers/[providerId]
-// GET: Retrieve single facility profile, full services & verification records
-// PATCH: Update facility information (Role: COORDINATOR or ADMIN)
-// ============================================================================
-
 import { NextRequest, NextResponse } from 'next/server';
-import { providerRepository } from '@/lib/db/provider-repository';
+import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import { getVerifiedAuthContext } from '@/lib/server/auth-guard';
+import { AccessError, requireRoles } from '@/lib/server/db-access';
 
-interface RouteParams {
-  params: Promise<{
-    providerId: string;
-  }>;
-}
+export const runtime = 'nodejs';
+type RouteContext = { params: Promise<{ providerId: string }> };
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+const updateSchema = z.object({
+  name: z.string().trim().min(2).max(200).optional(),
+  addressLine1: z.string().trim().min(3).max(200).optional(),
+  addressLine2: z.string().trim().max(200).nullable().optional(),
+  city: z.string().trim().min(1).max(100).optional(),
+  state: z.string().trim().min(1).max(100).optional(),
+  postalCode: z.string().trim().min(3).max(20).optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  phone: z.string().trim().max(32).nullable().optional(),
+  email: z.string().trim().email().nullable().optional(),
+  websiteUrl: z.string().trim().url().nullable().optional(),
+  emergencyCapable: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export async function GET(_request: NextRequest, { params }: RouteContext) {
   try {
     const { providerId } = await params;
-
-    if (!providerId || providerId.trim().length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_ID',
-            message: 'Provider ID parameter is required.',
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    const facility = providerRepository.getFacilityById(providerId);
-
-    if (!facility) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FACILITY_NOT_FOUND',
-            message: `No healthcare facility found matching ID: ${providerId}`,
-          },
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: facility,
+    const facility = await prisma.healthcareFacility.findUnique({
+      where: { id: providerId, isActive: true },
+      include: { services: true, verifications: { orderBy: { verifiedAt: 'desc' } } },
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown internal error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'FACILITY_FETCH_FAILED',
-          message: 'Failed to retrieve facility details.',
-          details: process.env.NODE_ENV === 'development' ? message : undefined,
-        },
-      },
-      { status: 500 }
-    );
+    if (!facility) return NextResponse.json({ success: false, error: { code: 'FACILITY_NOT_FOUND', message: 'Facility was not found.' } }, { status: 404 });
+    return NextResponse.json({ success: true, data: facility });
+  } catch (error) {
+    console.error('[providers/:id] Lookup failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'DIRECTORY_UNAVAILABLE', message: 'Facility details could not be loaded.' } }, { status: 503 });
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
+    const context = await getVerifiedAuthContext(request);
+    requireRoles(context, ['COORDINATOR', 'ADMIN']);
     const { providerId } = await params;
-    const roleHeader = request.headers.get('x-user-role');
-    const isAuthorized = roleHeader === 'COORDINATOR' || roleHeader === 'ADMIN';
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FORBIDDEN',
-            message: 'Access denied: Only authorized clinical coordinators and administrators may update healthcare facilities.',
-          },
-        },
-        { status: 403 }
-      );
+    const parsed = updateSchema.safeParse(await request.json());
+    if (!parsed.success || Object.keys(parsed.data || {}).length === 0) {
+      return NextResponse.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Provide valid facility fields to update.', details: parsed.success ? undefined : parsed.error.flatten() } }, { status: 400 });
     }
-
-    const body = await request.json();
-
-    // Prevent direct modification of verificationStatus via PATCH — must use formal /verification endpoint
-    if (body.verificationStatus) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_OPERATION',
-            message: 'Verification status cannot be changed directly via PATCH. Use POST /api/providers/:id/verification with audit evidence.',
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    // Strip protected fields
-    const { id: _id, createdAt: _created, updatedAt: _updated, verifications: _ver, services: _srv, ...sanitizedUpdates } = body;
-
-    const updated = providerRepository.updateFacility(providerId, sanitizedUpdates);
-
-    if (!updated) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FACILITY_NOT_FOUND',
-            message: `Cannot update: No healthcare facility found matching ID ${providerId}`,
-          },
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: updated,
-      meta: { message: 'Facility updated successfully.' },
+    const facility = await prisma.healthcareFacility.update({
+      where: { id: providerId },
+      data: parsed.data,
+      include: { services: true, verifications: { orderBy: { verifiedAt: 'desc' }, take: 1 } },
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown internal error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'FACILITY_UPDATE_FAILED',
-          message: 'Failed to update facility record.',
-          details: process.env.NODE_ENV === 'development' ? message : undefined,
-        },
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, data: facility });
+  } catch (error) {
+    if (error instanceof AccessError) return NextResponse.json({ success: false, error: { code: error.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', message: error.message } }, { status: error.status });
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+    if (code === 'P2025') return NextResponse.json({ success: false, error: { code: 'FACILITY_NOT_FOUND', message: 'Facility was not found.' } }, { status: 404 });
+    console.error('[providers/:id] Update failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'FACILITY_UPDATE_UNAVAILABLE', message: 'Facility changes could not be saved.' } }, { status: 503 });
   }
 }

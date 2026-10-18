@@ -4,10 +4,11 @@
 
 import { Router, Request, Response } from 'express';
 import { executeTravelComparison } from '@/lib/travel/comparison-service';
-import { TravelComparisonRequestSchema } from '@/lib/travel/types';
+import { GeoLocationSchema, TravelComparisonRequestSchema } from '@/lib/travel/types';
 import { SAVED_COMPARISONS } from '@/lib/travel/data-store';
 
 const router = Router();
+const legacyRequestSchema = TravelComparisonRequestSchema.extend({ origin: GeoLocationSchema });
 
 /**
  * POST /api/v1/travel/compare
@@ -15,7 +16,7 @@ const router = Router();
  */
 router.post('/compare', async (req: Request, res: Response): Promise<void> => {
   try {
-    const parseResult = TravelComparisonRequestSchema.safeParse(req.body);
+    const parseResult = legacyRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
       res.status(400).json({
         success: false,

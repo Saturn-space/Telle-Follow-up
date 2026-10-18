@@ -1,9 +1,7 @@
 // ============================================================================
 // TELE-FOLLOW-UP ORCHESTRATOR - API CLIENT & REQUEST INTERCEPTOR
-// Automatically injects Authorization: Bearer <token> into all requests
+// Uses same-origin HTTP-only session cookies.
 // ============================================================================
-
-const TOKEN_STORAGE_KEY = 'teleflow_auth_token';
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
@@ -38,15 +36,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
     }
   }
 
-  // Intercept and inject Authorization Bearer token from localStorage
   const headers = new Headers(options.headers || {});
-
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (token && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-  }
 
   // Ensure JSON Content-Type default when sending a body
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
@@ -56,6 +46,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
   const config: RequestInit = {
     ...options,
     headers,
+    credentials: options.credentials || 'same-origin',
   };
 
   const response = await fetch(url, config);
@@ -93,32 +84,32 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
 }
 
 export const apiClient = {
-  get: <T = any>(url: string, options?: RequestOptions) =>
-    request<T>(url, { ...options, method: 'GET' }),
+  get: <T = any>(endpoint: string, options?: RequestOptions) =>
+    request<T>(endpoint, { ...options, method: 'GET' }),
 
-  post: <T = any>(url: string, body?: any, options?: RequestOptions) =>
-    request<T>(url, {
+  post: <T = any>(endpoint: string, data?: any, options?: RequestOptions) =>
+    request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body: data instanceof FormData ? data : data !== undefined ? JSON.stringify(data) : undefined,
     }),
 
-  put: <T = any>(url: string, body?: any, options?: RequestOptions) =>
-    request<T>(url, {
+  put: <T = any>(endpoint: string, data?: any, options?: RequestOptions) =>
+    request<T>(endpoint, {
       ...options,
       method: 'PUT',
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body: data instanceof FormData ? data : data !== undefined ? JSON.stringify(data) : undefined,
     }),
 
-  patch: <T = any>(url: string, body?: any, options?: RequestOptions) =>
-    request<T>(url, {
+  patch: <T = any>(endpoint: string, data?: any, options?: RequestOptions) =>
+    request<T>(endpoint, {
       ...options,
       method: 'PATCH',
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body: data instanceof FormData ? data : data !== undefined ? JSON.stringify(data) : undefined,
     }),
 
-  delete: <T = any>(url: string, options?: RequestOptions) =>
-    request<T>(url, { ...options, method: 'DELETE' }),
+  delete: <T = any>(endpoint: string, options?: RequestOptions) =>
+    request<T>(endpoint, { ...options, method: 'DELETE' }),
 };
 
 export default apiClient;

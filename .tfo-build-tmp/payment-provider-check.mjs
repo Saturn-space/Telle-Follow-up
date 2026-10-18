@@ -1,0 +1,10 @@
+﻿const base="http://localhost:8000";
+const p=await fetch(base+"/api/providers"); const pj=await p.json();
+console.log(JSON.stringify({providersHttp:p.status,providerCount:Array.isArray(pj.data)?pj.data.length:null,emptyReason:pj.meta?.emptyReason}));
+const config=await fetch(base+"/api/payments/config"); const cj=await config.json();
+console.log(JSON.stringify({paymentConfigHttp:config.status,paymentsEnabled:cj.data?.enabled}));
+const lr=await fetch(base+"/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:"demo.patient@teleflow.local",password:"LocalDemoPatient!2026"})});
+const login=await lr.json(); const cookie=lr.headers.get("set-cookie")?.split(";")[0];
+const order=await fetch(base+"/api/payments/create-order",{method:"POST",headers:{"content-type":"application/json",cookie},body:JSON.stringify({planId:"local-demo-follow-up-plan-v1",appointmentId:"local-demo-teleconsult-v1",serviceType:"TELECONSULTATION"})});
+const oj=await order.json().catch(()=>null);
+console.log(JSON.stringify({paymentOrderHttp:order.status,orderCreated:Boolean(oj?.success),errorCode:oj?.error?.code,providerOrderPresent:Boolean(oj?.data?.order?.razorpayOrderId)}));

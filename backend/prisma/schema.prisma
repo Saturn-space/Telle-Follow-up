@@ -21,6 +21,7 @@ enum Role {
   PATIENT
   CLINICIAN
   COORDINATOR
+  ADMIN
 }
 
 model User {
@@ -38,6 +39,7 @@ model User {
   approvedFollowUpPlans      FollowUpPlan[]
   notifications              Notification[]
   paymentOrders              PaymentOrder[]
+  auditLogs                  AuditLog[]
 
   @@index([email])
   @@index([role])
@@ -72,6 +74,7 @@ model Patient {
   followUpPlans    FollowUpPlan[]
   appointments     Appointment[]
   careReferrals    CareReferral[]
+  documents        MedicalDocument[]
 
   @@index([userId])
   @@index([mrn])
@@ -639,4 +642,92 @@ model Notification {
   recipient       User             @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
 
   @@index([recipientUserId])
+}
+
+
+// ----------------------------------------------------------------------------
+// MEDICAL DOCUMENTS & OCR ANALYSIS
+// ----------------------------------------------------------------------------
+
+enum DocumentType {
+  DISCHARGE_SUMMARY
+  SURGICAL_NOTES
+  LAB_REPORT
+  PRESCRIPTION
+  WOUND_PHOTO
+  OTHER
+}
+
+enum OcrStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  NOT_REQUIRED
+}
+
+model MedicalDocument {
+  id            String       @id @default(uuid())
+  patientId     String
+  fileName      String
+  originalName  String
+  mimeType      String
+  fileSizeBytes Int
+  storagePath   String
+  documentType  DocumentType @default(DISCHARGE_SUMMARY)
+  ocrText       String?      @db.Text
+  ocrStatus     OcrStatus    @default(PENDING)
+  isVerified    Boolean      @default(false)
+  verifiedBy    String?
+  verifiedAt    DateTime?
+  clinicalNotes String?      @db.Text
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  patient       Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([documentType])
+  @@index([ocrStatus])
+}
+
+// ----------------------------------------------------------------------------
+// AUDIT LOGGING & SYSTEM OVERSIGHT
+// ----------------------------------------------------------------------------
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  REGISTER
+  ROLE_CHANGE
+  ACCOUNT_STATUS_CHANGE
+  VIEW_PATIENT_RECORD
+  SUBMIT_RECOVERY_LOG
+  CLINICAL_REVIEW
+  RISK_ESCALATION
+  APPOINTMENT_CREATE
+  APPOINTMENT_CANCEL
+  PAYMENT_CREATE
+  PAYMENT_VERIFIED
+  DOCUMENT_UPLOAD
+  DOCUMENT_VIEW
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String?
+  userEmail  String?
+  userRole   String?
+  action     AuditAction
+  entityType String
+  entityId   String?
+  details    String?     @db.Text
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
 }

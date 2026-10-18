@@ -1,98 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { store } from '@/lib/server/store';
-import { FollowUpService } from '@/lib/server/followup-service';
-import { CreateConsultationRecordSchema, ApiResponse } from '@/lib/types/followup';
-import { getAuthContext, checkRolePermission } from '@/lib/server/auth-guard';
+import { prisma } from '@/lib/prisma';
+import { getVerifiedAuthContext } from '@/lib/server/auth-guard';
+import { AccessError, requireAuthenticated, requirePatientAccess, requireRoles } from '@/lib/server/db-access';
+import { CreateConsultationRecordSchema } from '@/lib/types/followup';
 
-export async function GET(req: NextRequest) {
+export const runtime = 'nodejs';
+const recordSchema = CreateConsultationRecordSchema.omit({ clinicianId: true });
+
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const appointmentId = searchParams.get('appointmentId');
-
-    if (!appointmentId) {
-      return NextResponse.json(
-        { success: false, error: { code: 'BAD_REQUEST', message: 'appointmentId query parameter is required.' } },
-        { status: 400 }
-      );
-    }
-
-    const record = store.getConsultationRecord(appointmentId);
-    if (!record) {
-      return NextResponse.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'No clinical outcome recorded yet for this visit.' } },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ success: true, data: record });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown server error';
-    return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message } },
-      { status: 500 }
-    );
+    const context = await getVerifiedAuthContext(request);
+    requireAuthenticated(context);
+    const appointmentId = new URL(request.url).searchParams.get('appointmentId');
+    if (!appointmentId) return NextResponse.json({ success: false, error: { code: 'BAD_REQUEST', message: 'appointmentId is required.' } }, { status: 400 });
+    const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId }, include: { plan: true, outcomeRecord: true } });
+    if (!appointment) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment was not found.' } }, { status: 404 });
+    await requirePatientAccess(context, appointment.patientId);
+    if (context.role === 'CLINICIAN' && appointment.plan.approvedByClinicianId !== context.userId) throw new AccessError('This consultation is not assigned to your account.', 403);
+    if (!appointment.outcomeRecord) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'No clinical outcome has been recorded for this visit.' } }, { status: 404 });
+    return NextResponse.json({ success: true, data: appointment.outcomeRecord });
+  } catch (error) {
+    if (error instanceof AccessError) return NextResponse.json({ success: false, error: { code: error.status === 401 ? 'UNAUTHORIZED' : error.status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: error.message } }, { status: error.status });
+    console.error('[teleconsult/records] Query failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'DATABASE_UNAVAILABLE', message: 'The consultation record could not be loaded.' } }, { status: 503 });
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const context = getAuthContext(req);
-
-    // Only licensed clinicians can record clinical diagnosis & consultation outcomes
-    const perm = checkRolePermission(context, ['CLINICIAN']);
-    if (!perm.allowed) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'FORBIDDEN',
-            message: 'Access Denied: Only authorized clinicians can sign and submit clinical consultation outcome records.',
-          },
-        },
-        { status: 403 }
-      );
+    const context = await getVerifiedAuthContext(request);
+    requireRoles(context, ['CLINICIAN']);
+    const parsed = recordSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Consultation notes are invalid.', details: parsed.error.flatten() } }, { status: 400 });
+    const input = parsed.data;
+    const appointment = await prisma.appointment.findUnique({ where: { id: input.appointmentId }, include: { plan: true, teleSession: true, outcomeRecord: true } });
+    if (!appointment) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Appointment was not found.' } }, { status: 404 });
+    await requirePatientAccess(context, appointment.patientId);
+    if (appointment.plan.approvedByClinicianId !== context.userId) throw new AccessError('Only the assigned clinician may submit this consultation record.', 403);
+    if (appointment.status === 'CANCELLED' || appointment.status === 'COMPLETED') {
+      return NextResponse.json({ success: false, error: { code: 'INVALID_APPOINTMENT_STATE', message: 'This appointment cannot accept a consultation record.' } }, { status: 409 });
+    }
+    if (appointment.outcomeRecord) return NextResponse.json({ success: false, error: { code: 'RECORD_ALREADY_EXISTS', message: 'A consultation record already exists for this appointment.' } }, { status: 409 });
+    if (input.teleSessionId && appointment.teleSession?.id !== input.teleSessionId) {
+      return NextResponse.json({ success: false, error: { code: 'INVALID_SESSION', message: 'The selected consultation session is not linked to this appointment.' } }, { status: 400 });
     }
 
-    const body = await req.json();
-    const parsed = CreateConsultationRecordSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid consultation outcome payload.',
-            details: parsed.error.format(),
-          },
+    const record = await prisma.$transaction(async (tx) => {
+      const created = await tx.consultationRecord.create({
+        data: {
+          appointmentId: appointment.id,
+          teleSessionId: input.teleSessionId,
+          clinicianId: context.userId,
+          subjectiveNotes: input.subjectiveNotes,
+          objectiveFindings: input.objectiveFindings,
+          assessmentPlan: input.assessmentPlan,
+          followUpRequired: input.followUpRequired,
+          nextFollowUpDate: input.nextFollowUpDate ? new Date(input.nextFollowUpDate) : undefined,
         },
-        { status: 400 }
-      );
-    }
-
-    const result = FollowUpService.recordConsultationOutcome({
-      ...parsed.data,
-      clinicianId: context.userId || parsed.data.clinicianId,
+      });
+      await tx.appointment.update({ where: { id: appointment.id }, data: { status: 'COMPLETED' } });
+      if (appointment.teleSession) await tx.teleconsultationSession.update({ where: { id: appointment.teleSession.id }, data: { status: 'COMPLETED', endedAt: new Date() } });
+      await tx.auditLog.create({ data: { userId: context.userId, userEmail: context.email, userRole: context.role, action: 'CONSULTATION_RECORD', entityType: 'CONSULTATION_RECORD', entityId: created.id } });
+      return created;
     });
-
-    if (result.error) {
-      return NextResponse.json(
-        { success: false, error: { code: 'BAD_REQUEST', message: result.error } },
-        { status: 400 }
-      );
-    }
-
-    const response: ApiResponse = {
-      success: true,
-      data: result.record,
-      meta: { timestamp: new Date().toISOString() },
-    };
-    return NextResponse.json(response, { status: 201 });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown server error';
-    return NextResponse.json(
-      { success: false, error: { code: 'SERVER_ERROR', message } },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, data: record }, { status: 201 });
+  } catch (error) {
+    if (error instanceof AccessError) return NextResponse.json({ success: false, error: { code: error.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', message: error.message } }, { status: error.status });
+    console.error('[teleconsult/records] Save failed:', error instanceof Error ? error.name : 'unknown error');
+    return NextResponse.json({ success: false, error: { code: 'CONSULTATION_SAVE_UNAVAILABLE', message: 'The consultation record could not be saved.' } }, { status: 503 });
   }
 }
